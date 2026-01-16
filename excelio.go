@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -19,63 +18,54 @@ func OpenExcel(filename string) (*excelize.File, error) {
 
 // ReadConfig 从"配置"sheet读取配置
 func ReadConfig(f *excelize.File) (Config, error) {
-	// 尝试不同的sheet名
-	sheetNames := []string{"配置", "config", "Config", "设置"}
-	var rows [][]string
-	var err error
-
-	for _, name := range sheetNames {
-		rows, err = f.GetRows(name)
-		if err == nil && len(rows) > 0 {
-			break
-		}
+	for i, name := range f.GetSheetList() {
+		fmt.Printf("%d. %s\n", i+1, name)
+	}
+	// 只读名为"配置"的sheet，不尝试其他名字
+	rows, err := f.GetRows("配置")
+	if err != nil {
+		return Config{}, fmt.Errorf("找不到名为'配置'的sheet")
 	}
 
-	if err != nil || len(rows) == 0 {
-		return Config{}, fmt.Errorf("找不到配置sheet")
+	if len(rows) == 0 {
+		return Config{}, fmt.Errorf("'配置'sheet是空的")
+	}
+
+	// 第一行必须是标题
+	if len(rows[0]) < 2 || rows[0][0] != "配置项" || rows[0][1] != "值" {
+		return Config{}, fmt.Errorf("配置表格式错误，第一行必须是'配置项'和'值'")
 	}
 
 	config := Config{
 		MainSheet: "主表",
 		RefSheet:  "参考表",
-		MainSkip:  1,
-		RefSkip:   1,
+		MainKeys:  []string{"ID"},
+		RefKeys:   []string{"ID"},
 	}
 
-	for _, row := range rows {
-		if len(row) < 2 {
+	// 从第二行开始读取配置
+	for i := 1; i < len(rows); i++ {
+		if len(rows[i]) < 2 {
 			continue
 		}
 
-		key := strings.TrimSpace(row[0])
-		value := strings.TrimSpace(row[1])
+		key := strings.TrimSpace(rows[i][0])
+		value := strings.TrimSpace(rows[i][1])
 
 		switch key {
-		case "主表名称", "主表":
+		case "主表":
 			config.MainSheet = value
-		case "参考表名称", "参考表":
+		case "参考表":
 			config.RefSheet = value
-		case "主表主键列", "主表主键":
-			config.MainKeys = splitKeys(value)
-		case "参考表主键列", "参考表主键":
-			config.RefKeys = splitKeys(value)
-		case "主表跳过行数", "主表跳行":
-			if n, err := strconv.Atoi(value); err == nil {
-				config.MainSkip = n
+		case "主表主键":
+			if value != "" {
+				config.MainKeys = splitKeys(value)
 			}
-		case "参考表跳过行数", "参考表跳行":
-			if n, err := strconv.Atoi(value); err == nil {
-				config.RefSkip = n
+		case "参考表主键":
+			if value != "" {
+				config.RefKeys = splitKeys(value)
 			}
 		}
-	}
-
-	// 默认主键（如果没配置）
-	if len(config.MainKeys) == 0 {
-		config.MainKeys = []string{"ID"}
-	}
-	if len(config.RefKeys) == 0 {
-		config.RefKeys = []string{"ID"}
 	}
 
 	return config, nil
