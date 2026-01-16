@@ -21,13 +21,13 @@ func RunAnalysis(excelFile string) error {
 		return fmt.Errorf("读取配置失败: %w", err)
 	}
 
-	fmt.Printf("主表: %s (跳过%d行)\n", config.MainSheet, config.MainSkip)
-	fmt.Printf("参考表: %s (跳过%d行)\n", config.RefSheet, config.RefSkip)
+	fmt.Printf("主表: %s (跳过%d行)\n", config.MainSheet, config.HeaderRow)
+	fmt.Printf("参考表: %s (跳过%d行)\n", config.RefSheet, config.RefHeaderRow)
 	fmt.Printf("主键: %v ↔ %v\n", config.MainKeys, config.RefKeys)
 
 	// 3. 读取主表数据
 	fmt.Println("📥 加载主表数据...")
-	mainData, mainHeaders, err := LoadSheetData(f, config.MainSheet, config.MainSkip)
+	mainData, mainHeaders, err := LoadSheetData(f, config.MainSheet, config.HeaderRow)
 	if err != nil {
 		return fmt.Errorf("读取主表失败: %w", err)
 	}
@@ -35,7 +35,7 @@ func RunAnalysis(excelFile string) error {
 
 	// 4. 读取参考表数据
 	fmt.Println("📥 加载参考表数据...")
-	refData, refHeaders, err := LoadSheetData(f, config.RefSheet, config.RefSkip)
+	refData, refHeaders, err := LoadSheetData(f, config.RefSheet, config.RefHeaderRow)
 	if err != nil {
 		return fmt.Errorf("读取参考表失败: %w", err)
 	}

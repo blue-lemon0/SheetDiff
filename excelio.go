@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -18,79 +19,193 @@ func OpenExcel(filename string) (*excelize.File, error) {
 
 // ReadConfig 从"配置"sheet读取配置
 func ReadConfig(f *excelize.File) (Config, error) {
-	for i, name := range f.GetSheetList() {
-		fmt.Printf("%d. %s\n", i+1, name)
-	}
-	// 只读名为"配置"的sheet，不尝试其他名字
+	fmt.Println("🔧 开始读取配置...")
+
 	rows, err := f.GetRows("配置")
 	if err != nil {
+		fmt.Printf("❌ 读取'sheet失败: %v\n", err)
 		return Config{}, fmt.Errorf("找不到名为'配置'的sheet")
 	}
 
-	if len(rows) == 0 {
-		return Config{}, fmt.Errorf("'配置'sheet是空的")
-	}
+	fmt.Printf("✅ 配置sheet读取成功，共%d行\n", len(rows))
 
-	// 第一行必须是标题
-	if len(rows[0]) < 2 || rows[0][0] != "配置项" || rows[0][1] != "值" {
-		return Config{}, fmt.Errorf("配置表格式错误，第一行必须是'配置项'和'值'")
+	// 打印所有行查看
+	for i, row := range rows {
+		fmt.Printf("  行%d: ", i+1)
+		for j, cell := range row {
+			if j > 0 {
+				fmt.Printf(" | ")
+			}
+			fmt.Printf("[%d]'%s'", j, cell)
+		}
+		fmt.Println()
 	}
 
 	config := Config{
-		MainSheet: "主表",
-		RefSheet:  "参考表",
-		MainKeys:  []string{"ID"},
-		RefKeys:   []string{"ID"},
+		MainSheet:     "主表",
+		RefSheet:      "参考表",
+		HeaderRow:     1,
+		RefHeaderRow:  1,
+		FieldMappings: []FieldMapping{},
+		MainKeys:      []string{},
+		RefKeys:       []string{},
 	}
 
-	// 从第二行开始读取配置
-	for i := 1; i < len(rows); i++ {
-		if len(rows[i]) < 2 {
+	inMappingSection := false
+	mappingHeaderRow := -1
+
+	for i, row := range rows {
+		// 检查是否空行（作为分区标记）
+		if !inMappingSection && isEmptyConfigRow(row) {
+			fmt.Printf("🔧 第%d行: 检测到空行，进入字段映射区域\n", i+1)
+			inMappingSection = true
+			mappingHeaderRow = i + 1 // 下一行是表头
 			continue
 		}
 
-		key := strings.TrimSpace(rows[i][0])
-		value := strings.TrimSpace(rows[i][1])
+		if inMappingSection && i == mappingHeaderRow {
+			fmt.Printf("🔧 第%d行: 字段映射表头行，跳过\n", i+1)
+			continue
+		}
 
-		switch key {
-		case "主表":
-			config.MainSheet = value
-		case "参考表":
-			config.RefSheet = value
-		case "主表主键":
-			if value != "" {
-				config.MainKeys = splitKeys(value)
+		if inMappingSection && i > mappingHeaderRow {
+			// 字段映射数据行
+			if len(row) >= 2 {
+				mainField := strings.TrimSpace(row[0])
+				refField := strings.TrimSpace(row[1])
+
+				fmt.Printf("🔧 第%d行: 字段映射行，主表字段='%s', 参考表字段='%s'\n",
+					i+1, mainField, refField)
+
+				if mainField != "" && refField != "" {
+					// 判断是否主键：只认"是"
+					isKey := false
+					if len(row) >= 3 {
+						keyFlag := strings.TrimSpace(row[2])
+						fmt.Printf("   是否主键列值: '%s'\n", keyFlag)
+						if keyFlag == "是" {
+							isKey = true
+							fmt.Printf("   ✅ 标记为主键\n")
+						}
+					}
+
+					mapping := FieldMapping{
+						MainField: mainField,
+						RefField:  refField,
+						IsKey:     isKey,
+					}
+					config.FieldMappings = append(config.FieldMappings, mapping)
+
+					if isKey {
+						config.MainKeys = append(config.MainKeys, mainField)
+						config.RefKeys = append(config.RefKeys, refField)
+					}
+				} else {
+					fmt.Printf("   ⚠️ 主表字段或参考表字段为空，跳过\n")
+				}
+			} else {
+				fmt.Printf("🔧 第%d行: 列数不足%d列，跳过\n", i+1, len(row))
 			}
-		case "参考表主键":
-			if value != "" {
-				config.RefKeys = splitKeys(value)
+		} else {
+			// 基础配置区域
+			if len(row) >= 2 {
+				key := strings.TrimSpace(row[0])
+				value := strings.TrimSpace(row[1])
+
+				fmt.Printf("🔧 第%d行: 配置项 '%s' = '%s'\n", i+1, key, value)
+
+				switch key {
+				case "主表":
+					config.MainSheet = value
+					fmt.Printf("   设置主表sheet为: %s\n", value)
+				case "参考表":
+					config.RefSheet = value
+					fmt.Printf("   设置参考表sheet为: %s\n", value)
+				case "主表表头行":
+					if n, err := strconv.Atoi(value); err == nil {
+						config.HeaderRow = n
+						fmt.Printf("   设置主表表头行: %d\n", n)
+					} else {
+						fmt.Printf("   ⚠️ 主表表头行 '%s' 不是有效数字\n", value)
+					}
+				case "参考表表头行\n":
+					if n, err := strconv.Atoi(value); err == nil {
+						config.RefHeaderRow = n
+						fmt.Printf("   设置参考表表头行\n: %d\n", n)
+					} else {
+						fmt.Printf("   ⚠️ 参考表表头行\n值 '%s' 不是有效数字\n", value)
+					}
+				}
+			} else {
+				fmt.Printf("🔧 第%d行: 基础配置区域但列数不足，跳过\n", i+1)
 			}
 		}
+	}
+
+	// 验证
+	if len(config.MainKeys) == 0 {
+		fmt.Printf("❌ 配置错误：没有指定主键字段\n")
+		return Config{}, fmt.Errorf("配置错误：没有指定主键字段（请在'是否主键'列填写'是'）")
+	}
+
+	if len(config.FieldMappings) == 0 {
+		fmt.Printf("❌ 配置错误：没有配置字段映射\n")
+		return Config{}, fmt.Errorf("配置错误：没有配置字段映射")
+	}
+
+	fmt.Printf("✅ 配置解析完成:\n")
+	fmt.Printf("  主表: %s (跳过%d行)\n", config.MainSheet, config.HeaderRow)
+	fmt.Printf("  参考表: %s (跳过%d行)\n", config.RefSheet, config.RefHeaderRow)
+	fmt.Printf("  主键: %v ↔ %v\n", config.MainKeys, config.RefKeys)
+	fmt.Printf("  字段映射: %d 个字段\n", len(config.FieldMappings))
+	for i, m := range config.FieldMappings {
+		keyMark := ""
+		if m.IsKey {
+			keyMark = " (主键)"
+		}
+		fmt.Printf("    %d. %s ↔ %s%s\n", i+1, m.MainField, m.RefField, keyMark)
 	}
 
 	return config, nil
 }
 
+// isEmptyConfigRow 判断配置行是否为空
+func isEmptyConfigRow(row []string) bool {
+	for _, cell := range row {
+		if strings.TrimSpace(cell) != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // LoadSheetData 读取指定sheet的数据
-func LoadSheetData(f *excelize.File, sheet string, skipRows int) ([]Row, []string, error) {
+func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []string, error) {
+	// headerRow : 表头所在行号（Excel行号，从1开始）
+	fmt.Printf("🔧 开始加载sheet '%s' (表头在第%d行)\n", sheet, headerRow)
+
 	rows, err := f.GetRows(sheet)
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取sheet %s 失败: %w", sheet, err)
 	}
 
-	if len(rows) <= skipRows {
+	if len(rows) < headerRow {
 		return []Row{}, []string{}, nil
 	}
 
-	// 提取表头
-	headers := rows[skipRows]
+	// 表头行（0-based索引）
+	headers := rows[headerRow-1]
+	fmt.Printf("🔧 sheet '%s' 表头行(第%d行): %v\n", sheet, headerRow, headers)
+
 	for i, h := range headers {
 		headers[i] = strings.TrimSpace(h)
 	}
 
-	// 读取数据行
+	fmt.Printf("🔧 处理后表头: %v\n", headers)
+
+	// 读取数据行（从表头的下一行开始）
 	data := make([]Row, 0)
-	for i := skipRows + 1; i < len(rows); i++ {
+	for i := headerRow; i < len(rows); i++ {
 		row := make(Row)
 		for j, cell := range rows[i] {
 			if j < len(headers) && headers[j] != "" {
@@ -100,9 +215,14 @@ func LoadSheetData(f *excelize.File, sheet string, skipRows int) ([]Row, []strin
 		// 跳过全空的行
 		if !isEmptyRow(row) {
 			data = append(data, row)
+			// 打印第一行数据查看
+			if i == headerRow {
+				fmt.Printf("🔧 sheet '%s' 第一行数据(第%d行): %v\n", sheet, i+1, row)
+			}
 		}
 	}
 
+	fmt.Printf("✅ sheet '%s' 加载完成: %d行数据\n", sheet, len(data))
 	return data, headers, nil
 }
 

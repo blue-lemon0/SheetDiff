@@ -1,13 +1,21 @@
 package main
 
+// FieldMapping 字段映射
+type FieldMapping struct {
+	MainField string // 主表字段名
+	RefField  string // 参考表字段名
+	IsKey     bool   // 是否为主键
+}
+
 // Config 配置信息
 type Config struct {
-	MainSheet string   // 主表sheet名
-	RefSheet  string   // 参考表sheet名
-	MainKeys  []string // 主表主键字段
-	RefKeys   []string // 参考表主键字段
-	MainSkip  int      // 主表跳过行数
-	RefSkip   int      // 参考表跳过行数
+	MainSheet     string         // 主表sheet名
+	RefSheet      string         // 参考表sheet名
+	HeaderRow     int            // 表头行号（Excel行号，从1开始）
+	RefHeaderRow  int            // 参考表表头行号
+	FieldMappings []FieldMapping // 所有字段映射
+	MainKeys      []string       // 主表主键字段
+	RefKeys       []string       // 参考表主键字段
 }
 
 // Row 数据行
