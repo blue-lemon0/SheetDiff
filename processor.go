@@ -4,7 +4,7 @@ import "fmt"
 
 // RunAnalysis 主分析流程
 func RunAnalysis(excelFile string) error {
-	fmt.Println("🔍 开始分析:", excelFile)
+	fmt.Printf("🔍 开始分析: %s\n", excelFile)
 
 	// 1. 打开Excel文件
 	f, err := OpenExcel(excelFile)
@@ -47,13 +47,14 @@ func RunAnalysis(excelFile string) error {
 	fmt.Printf("匹配结果: 匹配%d行, 仅主表有%d行, 仅参考表有%d行\n",
 		len(result.Matched), len(result.OnlyMain), len(result.OnlyRef))
 
-	// 6. 差异分析
-	fmt.Println("📊 分析差异原因...")
-	analysis := AnalyzeDifferences(result, mainData, refData, config)
+	// 6. 差异分析（暂时不生成analysis，等后续实现）
+	// fmt.Println("📊 分析差异原因...")
+	// analysis := AnalyzeDifferences(result, mainData, refData, config)
+	analysis := []DiffAnalysis{} // 空分析结果
 
 	// 7. 输出结果
 	fmt.Println("💾 生成结果...")
-	if err := WriteResults(f, result, analysis, mainHeaders, refHeaders); err != nil {
+	if err := WriteResults(f, result, analysis, mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)
 	}
 

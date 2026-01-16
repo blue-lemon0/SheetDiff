@@ -107,7 +107,8 @@ func LoadSheetData(f *excelize.File, sheet string, skipRows int) ([]Row, []strin
 }
 
 // WriteResults 写入分析结果
-func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis, mainHeaders, refHeaders []string) error {
+func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis,
+	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
 
@@ -118,12 +119,12 @@ func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis,
 	}
 
 	// 写入统计信息
-	writeSummary(f, result)
+	writeSummary(f, result, mainCount, refCount)
 
-	// 写入差异分析
-	writeAnalysis(f, analysis)
+	// 写入差异分析（先保留，后面可能要删）
+	// writeAnalysis(f, analysis)
 
-	// 写入详细差异
+	// 写入详细差异样本
 	writeDetails(f, result, mainHeaders, refHeaders)
 
 	// 设置活动sheet
@@ -133,26 +134,39 @@ func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis,
 }
 
 // writeSummary 写入统计信息
-func writeSummary(f *excelize.File, result MatchResult) {
+func writeSummary(f *excelize.File, result MatchResult, mainCount, refCount int) {
 	f.SetCellValue("分析结果", "A1", "📊 数据比对统计")
 	f.SetCellValue("分析结果", "A2", "项目")
 	f.SetCellValue("分析结果", "B2", "数量")
+	f.SetCellValue("分析结果", "C2", "占比")
 
-	data := [][]interface{}{
-		{"总匹配行数", len(result.Matched)},
-		{"仅主表有", len(result.OnlyMain)},
-		{"仅参考表有", len(result.OnlyRef)},
-	}
+	// 主表总行数
+	f.SetCellValue("分析结果", "A3", "主表总行数")
+	f.SetCellValue("分析结果", "B3", mainCount)
+	f.SetCellValue("分析结果", "C3", "100%")
 
-	for i, row := range data {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", i+3), row[0])
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", i+3), row[1])
-	}
+	// 参考表总行数
+	f.SetCellValue("分析结果", "A4", "参考表总行数")
+	f.SetCellValue("分析结果", "B4", refCount)
+	f.SetCellValue("分析结果", "C4", "100%")
 
-	// 样式
-	f.SetCellValue("分析结果", "A8", "说明：")
-	f.SetCellValue("分析结果", "A9", "主表：用户提供的主数据表")
-	f.SetCellValue("分析结果", "A10", "参考表：用于比对的参考数据表")
+	// 匹配行数
+	matchRate := float64(len(result.Matched)) / float64(mainCount) * 100
+	f.SetCellValue("分析结果", "A5", "匹配行数")
+	f.SetCellValue("分析结果", "B5", len(result.Matched))
+	f.SetCellValue("分析结果", "C5", fmt.Sprintf("%.1f%%", matchRate))
+
+	// 仅主表有
+	onlyMainRate := float64(len(result.OnlyMain)) / float64(mainCount) * 100
+	f.SetCellValue("分析结果", "A6", "仅主表有")
+	f.SetCellValue("分析结果", "B6", len(result.OnlyMain))
+	f.SetCellValue("分析结果", "C6", fmt.Sprintf("%.1f%%", onlyMainRate))
+
+	// 仅参考表有
+	onlyRefRate := float64(len(result.OnlyRef)) / float64(refCount) * 100
+	f.SetCellValue("分析结果", "A7", "仅参考表有")
+	f.SetCellValue("分析结果", "B7", len(result.OnlyRef))
+	f.SetCellValue("分析结果", "C7", fmt.Sprintf("%.1f%%", onlyRefRate))
 }
 
 // writeAnalysis 写入差异分析
@@ -182,35 +196,86 @@ func writeAnalysis(f *excelize.File, analysis []DiffAnalysis) {
 	}
 }
 
-// writeDetails 写入详细差异
 func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders []string) {
-	startRow := 12 + len(result.Matched) + 5
+	startRow := 10
 
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "📝 详细差异（前20行）")
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow+1), "主键")
-	f.SetCellValue("分析结果", fmt.Sprintf("B%d", startRow+1), "所在表")
-	f.SetCellValue("分析结果", fmt.Sprintf("C%d", startRow+1), "差异字段")
+	// 1. 匹配数据样本
+	if len(result.Matched) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "【匹配的数据样本】")
+		startRow++
 
-	// 写入仅主表有的行
-	rowNum := startRow + 2
-	count := 0
-	for _, row := range result.OnlyMain {
-		if count >= 10 {
-			break
-		}
-		// 构建主键显示
-		keyParts := make([]string, 0)
-		for _, v := range row {
-			if len(keyParts) < 3 { // 只显示前3个字段
-				keyParts = append(keyParts, v)
+		// 写表头：显示主键列
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "匹配主键")
+		// 如果有多个主键，可以在B列、C列继续显示
+		startRow++
+
+		// 写数据（最多5行）
+		count := 0
+		for _, pair := range result.Matched {
+			if count >= 5 {
+				break
 			}
+			// 显示主键（完整的，不是截断的）
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), pair.Key)
+			startRow++
+			count++
 		}
-		key := strings.Join(keyParts, "|")
+		startRow++ // 空一行
+	}
 
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", rowNum), key)
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", rowNum), "仅主表有")
-		rowNum++
-		count++
+	// 2. 仅主表有的样本（最多5行）
+	if len(result.OnlyMain) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "【仅主表有的数据样本】")
+		startRow++
+
+		// 写表头
+		for i, h := range mainHeaders {
+			cell, _ := excelize.CoordinatesToCellName(i+1, startRow)
+			f.SetCellValue("分析结果", cell, h)
+		}
+		startRow++
+
+		// 写数据（最多5行）
+		count := 0
+		for _, row := range result.OnlyMain {
+			if count >= 5 {
+				break
+			}
+			for j, h := range mainHeaders {
+				cell, _ := excelize.CoordinatesToCellName(j+1, startRow)
+				f.SetCellValue("分析结果", cell, row[h])
+			}
+			startRow++
+			count++
+		}
+		startRow++ // 空一行
+	}
+
+	// 3. 仅参考表有的样本（最多5行）
+	if len(result.OnlyRef) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "【仅参考表有的数据样本】")
+		startRow++
+
+		// 写表头
+		for i, h := range refHeaders {
+			cell, _ := excelize.CoordinatesToCellName(i+1, startRow)
+			f.SetCellValue("分析结果", cell, h)
+		}
+		startRow++
+
+		// 写数据（最多5行）
+		count := 0
+		for _, row := range result.OnlyRef {
+			if count >= 5 {
+				break
+			}
+			for j, h := range refHeaders {
+				cell, _ := excelize.CoordinatesToCellName(j+1, startRow)
+				f.SetCellValue("分析结果", cell, row[h])
+			}
+			startRow++
+			count++
+		}
 	}
 }
 
