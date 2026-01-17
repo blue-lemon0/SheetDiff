@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// findPureFeatures 找出纯净特征
+// findPureFeatures 找出纯净特征（忽略有空白值的字段）
 func findPureFeatures(rowsA, rowsB []Row, keyFields []string) []Rule {
 	var rules []Rule
 
@@ -19,9 +19,10 @@ func findPureFeatures(rowsA, rowsB []Row, keyFields []string) []Rule {
 		valsA := getFieldValues(rowsA, field)
 		valsB := getFieldValues(rowsB, field)
 
-		// 找出只在A中出现，不在B中出现的值
-		if isPureField(valsA, valsB) && len(valsA) > 0 {
-			rule := buildRule(field, valsA)
+		// 有空白值就不纯净
+		if isPureField(valsA, valsB) && hasNonEmptyValues(valsA) {
+			nonEmptyVals := getNonEmptyValues(valsA)
+			rule := buildRule(field, nonEmptyVals)
 			rules = append(rules, rule)
 		}
 	}
@@ -47,19 +48,27 @@ func getNonKeyFields(sampleRow Row, keyFields []string) []string {
 	return fields
 }
 
-// getFieldValues 获取字段在所有行中的取值集合
+// getFieldValues 获取字段取值集合
 func getFieldValues(rows []Row, field string) map[string]bool {
 	values := make(map[string]bool)
 	for _, row := range rows {
-		if val, exists := row[field]; exists && val != "" {
-			values[val] = true
+		val := ""
+		if v, exists := row[field]; exists {
+			val = strings.TrimSpace(v)
 		}
+		values[val] = true
 	}
 	return values
 }
 
-// isPureField 检查字段是否是纯净字段
+// isPureField 检查字段是否是纯净字段（有空白值就不纯净）
 func isPureField(vals1, vals2 map[string]bool) bool {
+	// 规则1：任意一边有空白值就不纯净
+	if vals1[""] || vals2[""] {
+		return false
+	}
+
+	// 规则2：值有交集就不纯净
 	for val := range vals1 {
 		if vals2[val] {
 			return false
@@ -68,17 +77,37 @@ func isPureField(vals1, vals2 map[string]bool) bool {
 	return true
 }
 
-// buildRule 构建规则
+// hasNonEmptyValues 检查是否有非空白值
+func hasNonEmptyValues(values map[string]bool) bool {
+	for val := range values {
+		if val != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// getNonEmptyValues 获取非空白值
+func getNonEmptyValues(values map[string]bool) map[string]bool {
+	result := make(map[string]bool)
+	for val := range values {
+		if val != "" {
+			result[val] = true
+		}
+	}
+	return result
+}
+
+// buildRule 构建规则（只处理非空白值）
 func buildRule(field string, values map[string]bool) Rule {
 	vals := sortValues(values)
 	action, pattern := determineAction(vals)
 
 	return Rule{
-		Field:    field,
-		Action:   action,
-		Pattern:  pattern,
-		Values:   vals,
-		RuleType: "", // 在analyzer.go中设置
+		Field:   field,
+		Action:  action,
+		Pattern: pattern,
+		Values:  vals,
 	}
 }
 
@@ -94,6 +123,10 @@ func sortValues(values map[string]bool) []string {
 
 // determineAction 确定动作和模式
 func determineAction(values []string) (action, pattern string) {
+	if len(values) == 0 {
+		return "", ""
+	}
+
 	if len(values) == 1 {
 		return "等于", values[0]
 	}
@@ -123,10 +156,8 @@ func commonPrefix(values []string) string {
 		return ""
 	}
 
-	// 以第一个字符串为基准
 	prefix := values[0]
 	for i := 1; i < len(values); i++ {
-		// 缩短前缀直到匹配
 		for !strings.HasPrefix(values[i], prefix) {
 			if len(prefix) == 0 {
 				return ""
@@ -135,7 +166,6 @@ func commonPrefix(values []string) string {
 		}
 	}
 
-	// 如果前缀太短（小于2个字符），不算有效前缀
 	if len(prefix) < 2 {
 		return ""
 	}
@@ -149,7 +179,6 @@ func commonSuffix(values []string) string {
 		return ""
 	}
 
-	// 反转字符串找前缀
 	reversed := make([]string, len(values))
 	for i, v := range values {
 		reversed[i] = reverseString(v)
@@ -169,13 +198,11 @@ func commonSubstring(values []string) string {
 		return ""
 	}
 
-	// 简化的共同子串查找：找任意两个字符串的共同部分
 	base := values[0]
 	for i := len(base); i >= 2; i-- {
 		for j := 0; j <= len(base)-i; j++ {
 			substr := base[j : j+i]
 
-			// 检查是否所有值都包含这个子串
 			allContain := true
 			for _, v := range values {
 				if !strings.Contains(v, substr) {
