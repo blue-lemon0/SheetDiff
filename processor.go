@@ -37,14 +37,19 @@ func RunAnalysis(excelFile string) error {
 	// 6. 差异分析
 	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules := AnalyzeDifferences(result, config)
 
-	// 7. 输出结果
+	// 7. 分析过滤字段（新增）
+	mainFields, refFields := AnalyzeFilterFields(mainData, refData, mainHeaders, refHeaders,
+		config.MainKeys, config.RefKeys, config.FieldMappings)
+
+	// 8. 输出结果
 	if err := WriteResults(f, result,
 		mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules,
+		mainFields, refFields,
 		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)
 	}
 
-	// 8. 保存文件
+	// 9. 保存文件
 	if err := f.Save(); err != nil {
 		return fmt.Errorf("保存文件失败: %w", err)
 	}

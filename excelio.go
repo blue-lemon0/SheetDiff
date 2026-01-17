@@ -226,11 +226,10 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 	return data, headers, nil
 }
 
-// ... 前面的代码保持不变 ...
-
 // WriteResults 写入分析结果
 func WriteResults(f *excelize.File, result MatchResult,
 	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule,
+	mainFields, refFields []FilterFieldInfo,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
@@ -244,8 +243,11 @@ func WriteResults(f *excelize.File, result MatchResult,
 	// 写入统计信息（第1-10行）
 	writeSummary(f, result, mainCount, refCount)
 
-	// 写入规则（从第12行开始）
-	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, 12)
+	// 写入过滤字段分析（从第12行开始）
+	filterEndRow := writeFilterFields(f, mainFields, refFields, 12)
+
+	// 写入规则（从过滤字段分析结束行+2开始）
+	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, filterEndRow+2)
 
 	// 写入详细差异样本（从规则结束行+2开始）
 	writeDetails(f, result, mainHeaders, refHeaders, ruleEndRow+2)
@@ -254,6 +256,105 @@ func WriteResults(f *excelize.File, result MatchResult,
 	f.SetActiveSheet(index)
 
 	return nil
+}
+
+// writeFilterFields 写入过滤字段分析
+func writeFilterFields(f *excelize.File, mainFields, refFields []FilterFieldInfo, startRow int) int {
+	row := startRow
+
+	// 写入主表可能的过滤字段
+	if len(mainFields) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表可能的过滤字段】")
+		row++
+
+		// 表头
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段名")
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "取值数量")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "是否有空白")
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "是否常量")
+		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "可否作为过滤")
+		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "具体取值（最多5个）")
+		row++
+
+		// 先写入可能作为过滤的字段
+		for _, field := range mainFields {
+			if field.CouldBeFilter {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
+				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
+				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "✅ 可")
+				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
+				row++
+			}
+		}
+
+		// 再写入不能作为过滤的字段
+		for _, field := range mainFields {
+			if !field.CouldBeFilter {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
+				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
+				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "❌ 否")
+				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
+				row++
+			}
+		}
+
+		row++ // 空一行
+	}
+
+	// 写入参考表可能的过滤字段
+	if len(refFields) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表可能的过滤字段】")
+		row++
+
+		// 表头
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段名")
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "取值数量")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "是否有空白")
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "是否常量")
+		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "可否作为过滤")
+		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "具体取值（最多5个）")
+		row++
+
+		// 先写入可能作为过滤的字段
+		for _, field := range refFields {
+			if field.CouldBeFilter {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
+				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
+				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "✅ 可")
+				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
+				row++
+			}
+		}
+
+		// 再写入不能作为过滤的字段
+		for _, field := range refFields {
+			if !field.CouldBeFilter {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
+				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
+				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "❌ 否")
+				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
+				row++
+			}
+		}
+	}
+
+	return row
+}
+
+// boolToText 布尔值转文本
+func boolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
 }
 
 // writeAllRules 写入所有规则，返回最后使用的行号
@@ -413,33 +514,7 @@ func writeSummary(f *excelize.File, result MatchResult, mainCount, refCount int)
 	f.SetCellValue("分析结果", "C7", fmt.Sprintf("%.1f%%", onlyRefRate))
 }
 
-// writeAnalysis 写入差异分析
-func writeAnalysis(f *excelize.File, analysis []DiffAnalysis) {
-	startRow := 12
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "🔍 差异原因分析")
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow+1), "字段")
-	f.SetCellValue("分析结果", fmt.Sprintf("B%d", startRow+1), "可疑取值")
-	f.SetCellValue("分析结果", fmt.Sprintf("C%d", startRow+1), "独有行占比")
-	f.SetCellValue("分析结果", fmt.Sprintf("D%d", startRow+1), "匹配行占比")
-	f.SetCellValue("分析结果", fmt.Sprintf("E%d", startRow+1), "影响度")
-	f.SetCellValue("分析结果", fmt.Sprintf("F%d", startRow+1), "类型")
-
-	for i, item := range analysis {
-		row := startRow + 2 + i
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), item.Field)
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), item.Value)
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("%.1f%%", item.OnlyMainPct*100))
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), fmt.Sprintf("%.1f%%", item.MatchedPct*100))
-		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.2f", item.Impact))
-
-		typeText := "仅主表有"
-		if item.Type == "only_ref" {
-			typeText = "仅参考表有"
-		}
-		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), typeText)
-	}
-}
-
+// writeDetails 写入详细差异样本
 func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders []string, startRow int) {
 	// startRow 由调用者传入
 
@@ -518,6 +593,33 @@ func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders 
 			startRow++
 			count++
 		}
+	}
+}
+
+// writeAnalysis 写入差异分析
+func writeAnalysis(f *excelize.File, analysis []DiffAnalysis) {
+	startRow := 12
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "🔍 差异原因分析")
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow+1), "字段")
+	f.SetCellValue("分析结果", fmt.Sprintf("B%d", startRow+1), "可疑取值")
+	f.SetCellValue("分析结果", fmt.Sprintf("C%d", startRow+1), "独有行占比")
+	f.SetCellValue("分析结果", fmt.Sprintf("D%d", startRow+1), "匹配行占比")
+	f.SetCellValue("分析结果", fmt.Sprintf("E%d", startRow+1), "影响度")
+	f.SetCellValue("分析结果", fmt.Sprintf("F%d", startRow+1), "类型")
+
+	for i, item := range analysis {
+		row := startRow + 2 + i
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), item.Field)
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), item.Value)
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("%.1f%%", item.OnlyMainPct*100))
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), fmt.Sprintf("%.1f%%", item.MatchedPct*100))
+		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.2f", item.Impact))
+
+		typeText := "仅主表有"
+		if item.Type == "only_ref" {
+			typeText = "仅参考表有"
+		}
+		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), typeText)
 	}
 }
 

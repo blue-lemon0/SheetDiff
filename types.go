@@ -53,3 +53,13 @@ type Rule struct {
 	Values   []string // 所有取值
 	RuleType string   // 规则类型："主表独有"/"主表共有"/"参考表独有"/"参考表共有"
 }
+
+// FilterFieldInfo 过滤字段信息
+type FilterFieldInfo struct {
+	Field         string   // 字段名
+	ValueCount    int      // 取值数量
+	UniqueValues  []string // 具体取值（最多显示5个）
+	HasEmpty      bool     // 是否有空白值
+	IsConstant    bool     // 是否所有值都相同
+	CouldBeFilter bool     // 是否可能成为过滤字段
+}
