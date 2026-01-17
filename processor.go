@@ -35,10 +35,11 @@ func RunAnalysis(excelFile string) error {
 	result := MatchByKeys(mainData, refData, config)
 
 	// 6. 差异分析（使用新规则分析）
-	mainRules, refRules := AnalyzeDifferences(result, mainData, refData, config)
+	mainExcl, mainIncl, refExcl, refIncl := AnalyzeDifferences(result, config)
 
 	// 7. 输出结果
-	if err := WriteResults(f, result, mainRules, refRules, mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
+	if err := WriteResults(f, result, mainExcl, mainIncl, refExcl, refIncl,
+		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)
 	}
 

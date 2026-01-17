@@ -226,8 +226,11 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 	return data, headers, nil
 }
 
+// ... 前面的代码保持不变 ...
+
 // WriteResults 写入分析结果
-func WriteResults(f *excelize.File, result MatchResult, mainRules, refRules []Rule,
+func WriteResults(f *excelize.File, result MatchResult,
+	mainExcl, mainIncl, refExcl, refIncl []Rule,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
@@ -242,7 +245,7 @@ func WriteResults(f *excelize.File, result MatchResult, mainRules, refRules []Ru
 	writeSummary(f, result, mainCount, refCount)
 
 	// 写入过滤规则（从第12行开始）
-	ruleEndRow := writeRules(f, mainRules, refRules, 12)
+	ruleEndRow := writeAllRules(f, mainExcl, mainIncl, refExcl, refIncl, 12)
 
 	// 写入详细差异样本（从规则结束行+2开始）
 	writeDetails(f, result, mainHeaders, refHeaders, ruleEndRow+2)
@@ -251,6 +254,139 @@ func WriteResults(f *excelize.File, result MatchResult, mainRules, refRules []Ru
 	f.SetActiveSheet(index)
 
 	return nil
+}
+
+// writeAllRules 写入所有规则，返回最后使用的行号
+func writeAllRules(f *excelize.File, mainExcl, mainIncl, refExcl, refIncl []Rule, startRow int) int {
+	row := startRow
+
+	// 写入参考表规则
+	if len(mainExcl) > 0 || len(mainIncl) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表可能的规则】")
+		row++
+
+		// 写入排除型规则
+		if len(mainExcl) > 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "排除型（导致主表独有）")
+			row++
+
+			// 表头
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+			f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "过滤值")
+			row++
+
+			// 数据行
+			for _, rule := range mainExcl {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+				// 写入所有过滤值（从D列开始）
+				for i, val := range rule.Values {
+					col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+					f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+				}
+				row++
+			}
+
+			row++ // 空一行
+		}
+
+		// 写入包含型规则
+		if len(mainIncl) > 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "包含型（导致匹配行）")
+			row++
+
+			// 表头
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+			f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "包含值")
+			row++
+
+			// 数据行
+			for _, rule := range mainIncl {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+				// 写入所有包含值（从D列开始）
+				for i, val := range rule.Values {
+					col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+					f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+				}
+				row++
+			}
+
+			row++ // 空一行
+		}
+	}
+
+	// 写入主表规则
+	if len(refExcl) > 0 || len(refIncl) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表可能的规则】")
+		row++
+
+		// 写入排除型规则
+		if len(refExcl) > 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "排除型（导致参考表独有）")
+			row++
+
+			// 表头
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+			f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "过滤值")
+			row++
+
+			// 数据行
+			for _, rule := range refExcl {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+				// 写入所有过滤值（从D列开始）
+				for i, val := range rule.Values {
+					col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+					f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+				}
+				row++
+			}
+
+			row++ // 空一行
+		}
+
+		// 写入包含型规则
+		if len(refIncl) > 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "包含型（导致匹配行）")
+			row++
+
+			// 表头
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+			f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "包含值")
+			row++
+
+			// 数据行
+			for _, rule := range refIncl {
+				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+				// 写入所有包含值（从D列开始）
+				for i, val := range rule.Values {
+					col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+					f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+				}
+				row++
+			}
+		}
+	}
+
+	return row
 }
 
 // writeRules 写入过滤规则，返回最后使用的行号

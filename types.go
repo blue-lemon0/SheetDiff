@@ -44,3 +44,12 @@ type DiffAnalysis struct {
 	Impact      float64 // 影响度
 	Type        string  // "only_main" 或 "only_ref"
 }
+
+// Rule 过滤规则
+type Rule struct {
+	Field    string   // 字段名
+	Action   string   // 动作：不等于/等于/不包含/包含/开头不是/开头是...
+	Pattern  string   // 模式值
+	Values   []string // 所有过滤值
+	RuleType string   // "exclusive"(排除) 或 "inclusive"(包含)
+}

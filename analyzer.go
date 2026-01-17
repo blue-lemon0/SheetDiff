@@ -54,36 +54,54 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 }
 
 // AnalyzeDifferences 分析差异原因
-func AnalyzeDifferences(result MatchResult, mainData, refData []Row, config Config) ([]Rule, []Rule) {
-	var mainRules, refRules []Rule
+func AnalyzeDifferences(result MatchResult, config Config) ([]Rule, []Rule, []Rule, []Rule) {
+	var mainExcl, mainIncl, refExcl, refIncl []Rule
 
-	// 分析仅主表有的行（参考表可能的过滤规则）
+	// 分析仅主表有的行（参考表可能的排除规则）
 	if len(result.OnlyMain) > 0 {
 		// 提取共有行（主表侧）
 		commonMainRows := extractCommonRows(result.Matched, true)
 
-		// 找出纯净字段规则
-		mainRules = findPureRules(result.OnlyMain, commonMainRows, config.MainKeys)
+		// 找出排除型规则
+		mainExcl = findExclusiveRules(result.OnlyMain, commonMainRows, config.MainKeys)
 
-		if len(mainRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个参考表可能的过滤规则\n", len(mainRules))
+		if len(mainExcl) > 0 {
+			fmt.Printf("🔍 发现 %d 个参考表可能的排除规则\n", len(mainExcl))
+		}
+
+		// 找出包含型规则（匹配行特征 → 参考表包含规则）
+		if len(commonMainRows) > 0 {
+			mainIncl = findInclusiveRules(commonMainRows, result.OnlyMain, config.MainKeys)
+
+			if len(mainIncl) > 0 {
+				fmt.Printf("🔍 发现 %d 个参考表可能的包含规则\n", len(mainIncl))
+			}
 		}
 	}
 
-	// 分析仅参考表有的行（主表可能的过滤规则）
+	// 分析仅参考表有的行（主表可能的排除规则）
 	if len(result.OnlyRef) > 0 {
 		// 提取共有行（参考表侧）
 		commonRefRows := extractCommonRows(result.Matched, false)
 
-		// 找出纯净字段规则
-		refRules = findPureRules(result.OnlyRef, commonRefRows, config.RefKeys)
+		// 找出排除型规则
+		refExcl = findExclusiveRules(result.OnlyRef, commonRefRows, config.RefKeys)
 
-		if len(refRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个主表可能的过滤规则\n", len(refRules))
+		if len(refExcl) > 0 {
+			fmt.Printf("🔍 发现 %d 个主表可能的排除规则\n", len(refExcl))
+		}
+
+		// 找出包含型规则（匹配行特征 → 主表包含规则）
+		if len(commonRefRows) > 0 {
+			refIncl = findInclusiveRules(commonRefRows, result.OnlyRef, config.RefKeys)
+
+			if len(refIncl) > 0 {
+				fmt.Printf("🔍 发现 %d 个主表可能的包含规则\n", len(refIncl))
+			}
 		}
 	}
 
-	return mainRules, refRules
+	return mainExcl, mainIncl, refExcl, refIncl
 }
 
 // extractCommonRows 从匹配行中提取共有行
