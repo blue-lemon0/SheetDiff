@@ -227,7 +227,7 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 }
 
 // WriteResults 写入分析结果
-func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis,
+func WriteResults(f *excelize.File, result MatchResult, mainRules, refRules []Rule,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
@@ -238,19 +238,82 @@ func WriteResults(f *excelize.File, result MatchResult, analysis []DiffAnalysis,
 		return fmt.Errorf("创建sheet失败: %w", err)
 	}
 
-	// 写入统计信息
+	// 写入统计信息（第1-10行）
 	writeSummary(f, result, mainCount, refCount)
 
-	// 写入差异分析（先保留，后面可能要删）
-	// writeAnalysis(f, analysis)
+	// 写入过滤规则（从第12行开始）
+	ruleEndRow := writeRules(f, mainRules, refRules, 12)
 
-	// 写入详细差异样本
-	writeDetails(f, result, mainHeaders, refHeaders)
+	// 写入详细差异样本（从规则结束行+2开始）
+	writeDetails(f, result, mainHeaders, refHeaders, ruleEndRow+2)
 
 	// 设置活动sheet
 	f.SetActiveSheet(index)
 
 	return nil
+}
+
+// writeRules 写入过滤规则，返回最后使用的行号
+func writeRules(f *excelize.File, mainRules, refRules []Rule, startRow int) int {
+	row := startRow
+
+	// 写入参考表过滤规则
+	if len(mainRules) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表可能的过滤规则】")
+		row++
+
+		// 表头
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "过滤值")
+		row++
+
+		// 数据行
+		for _, rule := range mainRules {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+			// 写入所有过滤值（从D列开始）
+			for i, val := range rule.Values {
+				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+			}
+			row++
+		}
+
+		row++ // 空一行
+	}
+
+	// 写入主表过滤规则
+	if len(refRules) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表可能的过滤规则】")
+		row++
+
+		// 表头
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "过滤值")
+		row++
+
+		// 数据行
+		for _, rule := range refRules {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
+
+			// 写入所有过滤值（从D列开始）
+			for i, val := range rule.Values {
+				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
+				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
+			}
+			row++
+		}
+	}
+
+	return row
 }
 
 // writeSummary 写入统计信息
@@ -316,8 +379,8 @@ func writeAnalysis(f *excelize.File, analysis []DiffAnalysis) {
 	}
 }
 
-func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders []string) {
-	startRow := 10
+func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders []string, startRow int) {
+	// startRow 由调用者传入
 
 	// 1. 匹配数据样本
 	if len(result.Matched) > 0 {
@@ -326,7 +389,6 @@ func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders 
 
 		// 写表头：显示主键列
 		f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "匹配主键")
-		// 如果有多个主键，可以在B列、C列继续显示
 		startRow++
 
 		// 写数据（最多5行）
@@ -335,7 +397,6 @@ func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders 
 			if count >= 5 {
 				break
 			}
-			// 显示主键（完整的，不是截断的）
 			f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), pair.Key)
 			startRow++
 			count++

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -53,76 +54,49 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 }
 
 // AnalyzeDifferences 分析差异原因
-func AnalyzeDifferences(result MatchResult, mainData, refData []Row, config Config) []DiffAnalysis {
-	analysis := make([]DiffAnalysis, 0)
+func AnalyzeDifferences(result MatchResult, mainData, refData []Row, config Config) ([]Rule, []Rule) {
+	var mainRules, refRules []Rule
 
-	// 1. 分析仅主表有的行
+	// 分析仅主表有的行（参考表可能的过滤规则）
 	if len(result.OnlyMain) > 0 {
-		// 获取所有字段名（排除主键字段）
-		fields := getAllFields(result.OnlyMain[0], config.MainKeys)
+		// 提取共有行（主表侧）
+		commonMainRows := extractCommonRows(result.Matched, true)
 
-		for _, field := range fields {
-			// 统计在仅主表有行中的取值分布
-			onlyMainStats := countFieldValues(result.OnlyMain, field)
+		// 找出纯净字段规则
+		mainRules = findPureRules(result.OnlyMain, commonMainRows, config.MainKeys)
 
-			// 统计在匹配行中的取值分布
-			matchedStats := countFieldValuesInMatched(result.Matched, field, true)
-
-			// 找出差异明显的取值
-			for value, onlyMainCount := range onlyMainStats {
-				onlyMainPct := float64(onlyMainCount) / float64(len(result.OnlyMain))
-				matchedCount := matchedStats[value]
-				matchedPct := float64(matchedCount) / float64(len(result.Matched))
-
-				// 如果这个值在仅主表有中很常见，但在匹配中很少见
-				if onlyMainPct > 0.5 && matchedPct < 0.1 && onlyMainPct-matchedPct > 0.3 {
-					analysis = append(analysis, DiffAnalysis{
-						Field:       field,
-						Value:       value,
-						OnlyMainPct: onlyMainPct,
-						MatchedPct:  matchedPct,
-						Impact:      onlyMainPct - matchedPct,
-						Type:        "only_main",
-					})
-				}
-			}
+		if len(mainRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个参考表可能的过滤规则\n", len(mainRules))
 		}
 	}
 
-	// 2. 分析仅参考表有的行
+	// 分析仅参考表有的行（主表可能的过滤规则）
 	if len(result.OnlyRef) > 0 {
-		// 获取所有字段名（排除主键字段）
-		fields := getAllFields(result.OnlyRef[0], config.RefKeys)
+		// 提取共有行（参考表侧）
+		commonRefRows := extractCommonRows(result.Matched, false)
 
-		for _, field := range fields {
-			// 统计在仅参考表有行中的取值分布
-			onlyRefStats := countFieldValues(result.OnlyRef, field)
+		// 找出纯净字段规则
+		refRules = findPureRules(result.OnlyRef, commonRefRows, config.RefKeys)
 
-			// 统计在匹配行中的取值分布
-			matchedStats := countFieldValuesInMatched(result.Matched, field, false)
-
-			// 找出差异明显的取值
-			for value, onlyRefCount := range onlyRefStats {
-				onlyRefPct := float64(onlyRefCount) / float64(len(result.OnlyRef))
-				matchedCount := matchedStats[value]
-				matchedPct := float64(matchedCount) / float64(len(result.Matched))
-
-				// 如果这个值在仅参考表有中很常见，但在匹配中很少见
-				if onlyRefPct > 0.5 && matchedPct < 0.1 && onlyRefPct-matchedPct > 0.3 {
-					analysis = append(analysis, DiffAnalysis{
-						Field:       field,
-						Value:       value,
-						OnlyMainPct: onlyRefPct, // 注意：这里复用OnlyMainPct字段
-						MatchedPct:  matchedPct,
-						Impact:      onlyRefPct - matchedPct,
-						Type:        "only_ref",
-					})
-				}
-			}
+		if len(refRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个主表可能的过滤规则\n", len(refRules))
 		}
 	}
 
-	return analysis
+	return mainRules, refRules
+}
+
+// extractCommonRows 从匹配行中提取共有行
+func extractCommonRows(matched []MatchedPair, fromMain bool) []Row {
+	var rows []Row
+	for _, pair := range matched {
+		if fromMain {
+			rows = append(rows, pair.MainRow)
+		} else {
+			rows = append(rows, pair.RefRow)
+		}
+	}
+	return rows
 }
 
 // buildRowKey 构建行的主键字符串
