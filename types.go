@@ -45,11 +45,11 @@ type DiffAnalysis struct {
 	Type        string  // "only_main" 或 "only_ref"
 }
 
-// Rule 过滤规则
+// Rule 规则
 type Rule struct {
 	Field    string   // 字段名
-	Action   string   // 动作：不等于/等于/不包含/包含/开头不是/开头是...
+	Action   string   // 动作：等于/开头是/结尾是/包含/在列表中
 	Pattern  string   // 模式值
-	Values   []string // 所有过滤值
-	RuleType string   // "exclusive"(排除) 或 "inclusive"(包含)
+	Values   []string // 所有取值
+	RuleType string   // 规则类型："主表独有"/"主表共有"/"参考表独有"/"参考表共有"
 }

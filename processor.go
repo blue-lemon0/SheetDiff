@@ -34,11 +34,12 @@ func RunAnalysis(excelFile string) error {
 	// 5. 主键匹配
 	result := MatchByKeys(mainData, refData, config)
 
-	// 6. 差异分析（使用新规则分析）
-	mainExcl, mainIncl, refExcl, refIncl := AnalyzeDifferences(result, config)
+	// 6. 差异分析
+	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules := AnalyzeDifferences(result, config)
 
 	// 7. 输出结果
-	if err := WriteResults(f, result, mainExcl, mainIncl, refExcl, refIncl,
+	if err := WriteResults(f, result,
+		mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules,
 		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)
 	}

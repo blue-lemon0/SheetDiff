@@ -55,53 +55,56 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 
 // AnalyzeDifferences 分析差异原因
 func AnalyzeDifferences(result MatchResult, config Config) ([]Rule, []Rule, []Rule, []Rule) {
-	var mainExcl, mainIncl, refExcl, refIncl []Rule
+	var mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule
 
-	// 分析仅主表有的行（参考表可能的排除规则）
-	if len(result.OnlyMain) > 0 {
-		// 提取共有行（主表侧）
-		commonMainRows := extractCommonRows(result.Matched, true)
+	// 提取数据
+	mainCommonRows := extractCommonRows(result.Matched, true)
+	refCommonRows := extractCommonRows(result.Matched, false)
 
-		// 找出排除型规则
-		mainExcl = findExclusiveRules(result.OnlyMain, commonMainRows, config.MainKeys)
-
-		if len(mainExcl) > 0 {
-			fmt.Printf("🔍 发现 %d 个参考表可能的排除规则\n", len(mainExcl))
-		}
-
-		// 找出包含型规则（匹配行特征 → 参考表包含规则）
-		if len(commonMainRows) > 0 {
-			mainIncl = findInclusiveRules(commonMainRows, result.OnlyMain, config.MainKeys)
-
-			if len(mainIncl) > 0 {
-				fmt.Printf("🔍 发现 %d 个参考表可能的包含规则\n", len(mainIncl))
-			}
+	// 1. 分析主表独有行特征
+	if len(result.OnlyMain) > 0 && len(mainCommonRows) > 0 {
+		mainOnlyRules = findPureFeatures(result.OnlyMain, mainCommonRows, config.MainKeys)
+		setRuleType(mainOnlyRules, "主表独有")
+		if len(mainOnlyRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个主表独有行特征\n", len(mainOnlyRules))
 		}
 	}
 
-	// 分析仅参考表有的行（主表可能的排除规则）
-	if len(result.OnlyRef) > 0 {
-		// 提取共有行（参考表侧）
-		commonRefRows := extractCommonRows(result.Matched, false)
-
-		// 找出排除型规则
-		refExcl = findExclusiveRules(result.OnlyRef, commonRefRows, config.RefKeys)
-
-		if len(refExcl) > 0 {
-			fmt.Printf("🔍 发现 %d 个主表可能的排除规则\n", len(refExcl))
-		}
-
-		// 找出包含型规则（匹配行特征 → 主表包含规则）
-		if len(commonRefRows) > 0 {
-			refIncl = findInclusiveRules(commonRefRows, result.OnlyRef, config.RefKeys)
-
-			if len(refIncl) > 0 {
-				fmt.Printf("🔍 发现 %d 个主表可能的包含规则\n", len(refIncl))
-			}
+	// 2. 分析主表共有行特征
+	if len(mainCommonRows) > 0 && len(result.OnlyMain) > 0 {
+		mainCommonRules = findPureFeatures(mainCommonRows, result.OnlyMain, config.MainKeys)
+		setRuleType(mainCommonRules, "主表共有")
+		if len(mainCommonRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个主表共有行特征\n", len(mainCommonRules))
 		}
 	}
 
-	return mainExcl, mainIncl, refExcl, refIncl
+	// 3. 分析参考表独有行特征
+	if len(result.OnlyRef) > 0 && len(refCommonRows) > 0 {
+		refOnlyRules = findPureFeatures(result.OnlyRef, refCommonRows, config.RefKeys)
+		setRuleType(refOnlyRules, "参考表独有")
+		if len(refOnlyRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个参考表独有行特征\n", len(refOnlyRules))
+		}
+	}
+
+	// 4. 分析参考表共有行特征
+	if len(refCommonRows) > 0 && len(result.OnlyRef) > 0 {
+		refCommonRules = findPureFeatures(refCommonRows, result.OnlyRef, config.RefKeys)
+		setRuleType(refCommonRules, "参考表共有")
+		if len(refCommonRules) > 0 {
+			fmt.Printf("🔍 发现 %d 个参考表共有行特征\n", len(refCommonRules))
+		}
+	}
+
+	return mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules
+}
+
+// setRuleType 设置规则类型
+func setRuleType(rules []Rule, ruleType string) {
+	for i := range rules {
+		rules[i].RuleType = ruleType
+	}
 }
 
 // extractCommonRows 从匹配行中提取共有行
