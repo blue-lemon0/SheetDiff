@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 )
@@ -296,12 +295,6 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 func (b *FieldChainBuilder) BuildChain(field string, rows []Row) *FieldChain {
 	// 1. 找出所有能覆盖commonSet的取值组合
 	candidates := b.findAllCoveringCombinations(field, rows)
-
-	fmt.Printf("  字段 %s: 找到 %d 个候选组合", field, len(candidates))
-	if len(candidates) > 0 {
-		fmt.Printf(" (最小D=%d)", candidates[0].dSet.Len())
-	}
-	fmt.Println()
 
 	if len(candidates) == 0 {
 		return nil

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 )
@@ -66,36 +65,24 @@ func AnalyzeDifferences(result MatchResult, config Config) ([]Rule, []Rule, []Ru
 	if len(result.OnlyMain) > 0 && len(mainCommonRows) > 0 {
 		mainOnlyRules = findPureFeatures(result.OnlyMain, mainCommonRows, config.MainKeys)
 		setRuleType(mainOnlyRules, "主表独有")
-		if len(mainOnlyRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个主表独有行特征\n", len(mainOnlyRules))
-		}
 	}
 
 	// 2. 分析主表共有行特征
 	if len(mainCommonRows) > 0 && len(result.OnlyMain) > 0 {
 		mainCommonRules = findPureFeatures(mainCommonRows, result.OnlyMain, config.MainKeys)
 		setRuleType(mainCommonRules, "主表共有")
-		if len(mainCommonRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个主表共有行特征\n", len(mainCommonRules))
-		}
 	}
 
 	// 3. 分析参考表独有行特征
 	if len(result.OnlyRef) > 0 && len(refCommonRows) > 0 {
 		refOnlyRules = findPureFeatures(result.OnlyRef, refCommonRows, config.RefKeys)
 		setRuleType(refOnlyRules, "参考表独有")
-		if len(refOnlyRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个参考表独有行特征\n", len(refOnlyRules))
-		}
 	}
 
 	// 4. 分析参考表共有行特征
 	if len(refCommonRows) > 0 && len(result.OnlyRef) > 0 {
 		refCommonRules = findPureFeatures(refCommonRows, result.OnlyRef, config.RefKeys)
 		setRuleType(refCommonRules, "参考表共有")
-		if len(refCommonRules) > 0 {
-			fmt.Printf("🔍 发现 %d 个参考表共有行特征\n", len(refCommonRules))
-		}
 	}
 
 	return mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules

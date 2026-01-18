@@ -4,8 +4,6 @@ import "fmt"
 
 // RunAnalysis 主分析流程
 func RunAnalysis(excelFile string) error {
-	fmt.Printf("🔍 开始分析: %s\n", excelFile)
-
 	// 1. 打开Excel文件
 	f, err := OpenExcel(excelFile)
 	if err != nil {

@@ -42,15 +42,15 @@ import (
 
 func runFile(filename string) {
 	if !strings.HasSuffix(strings.ToLower(filename), ".xlsx") {
-		fmt.Println("请提供.xlsx文件")
+		fmt.Println("错误: 请提供.xlsx文件")
 		return
 	}
 
-	fmt.Printf("分析: %s\n", filename)
+	fmt.Printf("分析文件: %s\n", filename)
 
 	if err := RunAnalysis(filename); err != nil {
 		fmt.Printf("错误: %v\n", err)
 	} else {
-		fmt.Println("完成！请查看Excel中的'分析结果'sheet")
+		fmt.Println("✅ 分析完成！请查看Excel中的'分析结果'sheet")
 	}
 }
