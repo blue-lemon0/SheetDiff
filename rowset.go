@@ -189,3 +189,34 @@ func (rs *RowSet) Reset(capacity int) {
 	}
 	rs.count = 0
 }
+
+// String 返回集合的字符串表示（用于去重比较）
+func (rs *RowSet) String() string {
+	if rs.count == 0 {
+		return "[]"
+	}
+
+	// 使用bits的二进制表示作为唯一标识
+	result := "["
+	first := true
+	for i, word := range rs.bits {
+		if word == 0 {
+			continue
+		}
+		for bit := 0; bit < 64; bit++ {
+			if word&(uint64(1)<<bit) != 0 {
+				row := i*64 + bit
+				if row >= rs.size {
+					break
+				}
+				if !first {
+					result += ","
+				}
+				result += string(rune('0' + row)) // 简化表示
+				first = false
+			}
+		}
+	}
+	result += "]"
+	return result
+}
