@@ -170,10 +170,20 @@ func analyzeEqualPatterns(stats *FieldStats, commonSet *RowSet) []*FieldNode {
 func analyzeEnumPatterns(stats *FieldStats, commonSet *RowSet, maxValues int) []*FieldNode {
 	var nodes []*FieldNode
 
+	// 性能保护：如果值太多，跳过枚举分析
+	if len(stats.Values) > 50 {
+		return nodes // 超过50个不同值，跳过枚举分析（避免组合爆炸）
+	}
+
 	// 尝试不同大小的值集合（2到maxValues）
 	for setSize := 2; setSize <= maxValues && setSize <= len(stats.Values); setSize++ {
 		// 生成所有可能的值组合
 		combinations := generateCombinations(stats.Values, setSize)
+
+		// 性能保护：如果组合数量过多，只取前1000个
+		if len(combinations) > 1000 {
+			combinations = combinations[:1000]
+		}
 
 		for _, combo := range combinations {
 			// 计算这个组合覆盖的行
@@ -260,15 +270,25 @@ func analyzePrefixEnumPatterns(stats *FieldStats, commonSet *RowSet, maxPrefixes
 		}
 	}
 
-	// 提取前缀列表
+	// 性能保护：如果前缀太多，只取最常见的
 	var prefixes []string
 	for prefix := range prefixRows {
 		prefixes = append(prefixes, prefix)
 	}
 
+	// 限制前缀数量
+	if len(prefixes) > 50 {
+		prefixes = prefixes[:50] // 最多分析50个前缀
+	}
+
 	// 尝试不同数量的前缀组合（2到maxPrefixes）
 	for setSize := 2; setSize <= maxPrefixes && setSize <= len(prefixes); setSize++ {
 		combinations := generateCombinations(prefixes, setSize)
+
+		// 性能保护：如果组合数量过多，只取前1000个
+		if len(combinations) > 1000 {
+			combinations = combinations[:1000]
+		}
 
 		for _, combo := range combinations {
 			// 计算这个前缀组合覆盖的行
