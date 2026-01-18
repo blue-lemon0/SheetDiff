@@ -1,6 +1,10 @@
 package main
 
-import "math/bits"
+import (
+	"math/bits"
+	"strconv"
+	"strings"
+)
 
 // RowSet 行集合（bitset实现）
 // 用于高效存储和操作行索引集合
@@ -196,27 +200,20 @@ func (rs *RowSet) String() string {
 		return "[]"
 	}
 
-	// 使用bits的二进制表示作为唯一标识
-	result := "["
-	first := true
+	var rows []string
 	for i, word := range rs.bits {
 		if word == 0 {
 			continue
 		}
 		for bit := 0; bit < 64; bit++ {
-			if word&(uint64(1)<<bit) != 0 {
+			if word&(1<<bit) != 0 {
 				row := i*64 + bit
 				if row >= rs.size {
 					break
 				}
-				if !first {
-					result += ","
-				}
-				result += string(rune('0' + row)) // 简化表示
-				first = false
+				rows = append(rows, strconv.Itoa(row))
 			}
 		}
 	}
-	result += "]"
-	return result
+	return "[" + strings.Join(rows, ",") + "]"
 }
