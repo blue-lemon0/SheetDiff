@@ -1,10 +1,5 @@
 package main
 
-import (
-	"sort"
-	"strings"
-)
-
 // ========== 基本数据类型 ==========
 
 // Row 数据行类型
@@ -45,20 +40,6 @@ type PerfectRule struct {
 type RuleCondition struct {
 	Field  string
 	Values []string
-}
-
-// ========== 构建器类 ==========
-
-// candidate 候选组合
-type candidate struct {
-	values []string
-	dSet   *RowSet
-}
-
-// FieldChainBuilder 字段链条构建器
-type FieldChainBuilder struct {
-	totalRows int
-	commonSet *RowSet
 }
 
 // ========== 主算法类 ==========
@@ -107,17 +88,12 @@ func (rf *RuleFinder) buildAllChains(rows []Row, commonSet *RowSet) []*FieldChai
 		fields = append(fields, field)
 	}
 
-	// 为每个字段构建链条
-	builder := &FieldChainBuilder{
-		totalRows: len(rows),
-		commonSet: commonSet,
-	}
-
+	// 为每个字段构建链条（使用 pattern_analyzer.go 的强化分析）
 	var chains []*FieldChain
 	for _, field := range fields {
-		// TODO: 性能优化 - 应该一次性预处理所有字段，避免重复遍历
-		// TODO 改用 pattern_analyzer.go 的分析函数
-		chain := builder.BuildChain(field, rows)
+		// 使用 pattern_analyzer.go 的强化分析函数
+		// 支持等于、前缀、范围等多种规律
+		chain := analyzeFieldPatterns(field, rows, commonSet)
 		if chain != nil && chain.Root != nil {
 			chains = append(chains, chain)
 		}
@@ -288,89 +264,4 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 	}
 
 	return rules
-}
-
-// ========== FieldChainBuilder 的方法 ==========
-
-func (b *FieldChainBuilder) BuildChain(field string, rows []Row) *FieldChain {
-	// 1. 找出所有能覆盖commonSet的取值组合
-	candidates := b.findAllCoveringCombinations(field, rows)
-
-	if len(candidates) == 0 {
-		return nil
-	}
-
-	// 2. 按独有行数排序
-	b.sortCandidatesByDSize(candidates)
-
-	// 3. 构建节点链条
-	chain := &FieldChain{Field: field}
-	for i, cand := range candidates {
-		node := &FieldNode{
-			Field:  field,
-			Values: cand.values,
-			D:      cand.dSet,
-			IsRoot: i == 0,
-		}
-		chain.Nodes = append(chain.Nodes, node)
-	}
-
-	if len(chain.Nodes) > 0 {
-		chain.Root = chain.Nodes[0]
-	}
-
-	return chain
-}
-
-// findAllCoveringCombinations 找出所有能覆盖C的取值组合
-func (b *FieldChainBuilder) findAllCoveringCombinations(field string, rows []Row) []candidate {
-	var candidates []candidate
-
-	// 简单实现：只考虑单个值
-	candidates = append(candidates, b.findSingleValueCombinations(field, rows)...)
-
-	return candidates
-}
-
-func (b *FieldChainBuilder) findSingleValueCombinations(field string, rows []Row) []candidate {
-	// 统计每个值对应的行
-	valueRows := make(map[string]*RowSet)
-	for i, row := range rows {
-		val := strings.TrimSpace(row[field])
-		if set, exists := valueRows[val]; exists {
-			set.Add(i)
-		} else {
-			set = NewRowSet(b.totalRows)
-			set.Add(i)
-			valueRows[val] = set
-		}
-	}
-
-	var candidates []candidate
-	for val, rowSet := range valueRows {
-		// 检查是否包含所有共有行
-		// 正确方法：commonSet ⊆ rowSet
-		tempSet := b.commonSet.Clone()
-		tempSet.Subtract(rowSet)
-
-		if tempSet.Empty() {
-			// 计算独有行集合 D = rowSet - commonSet
-			dSet := rowSet.Clone()
-			dSet.Subtract(b.commonSet)
-
-			candidates = append(candidates, candidate{
-				values: []string{val},
-				dSet:   dSet,
-			})
-		}
-	}
-
-	return candidates
-}
-
-// sortCandidatesByDSize 按D集合大小排序
-func (b *FieldChainBuilder) sortCandidatesByDSize(candidates []candidate) {
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].dSet.Len() < candidates[j].dSet.Len()
-	})
 }
