@@ -83,7 +83,7 @@ func NewRuleFinder() *RuleFinder {
 // ========== 核心算法方法 ==========
 
 // FindRules 发现规则（主要入口）
-func (rf *RuleFinder) FindRows(rows []Row, commonSet *RowSet) []PerfectRule {
+func (rf *RuleFinder) FindRules(rows []Row, commonSet *RowSet) []PerfectRule {
 	// 1. 构建所有字段链条
 	chains := rf.buildAllChains(rows, commonSet)
 
@@ -91,7 +91,7 @@ func (rf *RuleFinder) FindRows(rows []Row, commonSet *RowSet) []PerfectRule {
 	forest := rf.buildForest(chains)
 
 	// 3. 寻找完美规则
-	rules := rf.findPerfectRules(forest, commonSet.Count(), len(rows))
+	rules := rf.findPerfectRules(forest, commonSet.Len(), len(rows))
 
 	return rules
 }
@@ -116,6 +116,8 @@ func (rf *RuleFinder) buildAllChains(rows []Row, commonSet *RowSet) []*FieldChai
 
 	var chains []*FieldChain
 	for _, field := range fields {
+		// TODO: 性能优化 - 应该一次性预处理所有字段，避免重复遍历
+		// TODO 改用 pattern_analyzer.go 的分析函数
 		chain := builder.BuildChain(field, rows)
 		if chain != nil && chain.Root != nil {
 			chains = append(chains, chain)
@@ -154,10 +156,10 @@ func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) []*Tree {
 			}
 
 			// 检查支配关系
-			if roots[i].D.IsSubsetOf(roots[j].D) {
+			if roots[i].D.SubsetOf(roots[j].D) {
 				// roots[i] ⊆ roots[j]，roots[i]更好（更小的D）
 				childrenMap[roots[i]] = append(childrenMap[roots[i]], roots[j])
-			} else if roots[j].D.IsSubsetOf(roots[i].D) {
+			} else if roots[j].D.SubsetOf(roots[i].D) {
 				childrenMap[roots[j]] = append(childrenMap[roots[j]], roots[i])
 			}
 		}
@@ -172,7 +174,7 @@ func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) []*Tree {
 				continue
 			}
 			// 如果其他节点支配这个节点，那么它不是顶级
-			if other.D.IsSubsetOf(node.D) && !node.D.IsSubsetOf(other.D) {
+			if other.D.SubsetOf(node.D) && !node.D.SubsetOf(other.D) {
 				isTopLevel = false
 				break
 			}
@@ -189,7 +191,7 @@ func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) []*Tree {
 		if children, exists := childrenMap[rootNode]; exists {
 			for _, childNode := range children {
 				// 检查这个child是否确实被root支配
-				if childNode.D.IsSubsetOf(rootNode.D) {
+				if childNode.D.SubsetOf(rootNode.D) {
 					tree.Children = append(tree.Children, &Tree{
 						Root:   childNode,
 						Parent: tree,
@@ -223,7 +225,7 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 
 	// 1. 检查单个完美字段（D为空）
 	for _, root := range roots {
-		if root.D.Count() == 0 {
+		if root.D.Len() == 0 {
 			rules = append(rules, PerfectRule{
 				Conditions:  []RuleCondition{{Field: root.Field, Values: root.Values}},
 				Covered:     commonCount,
@@ -237,8 +239,8 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 	for i := 0; i < len(roots); i++ {
 		for j := i + 1; j < len(roots); j++ {
 			// 检查两个D是否不相交
-			if !roots[i].D.HasIntersection(roots[j].D) {
-				totalDSize := roots[i].D.Count() + roots[j].D.Count()
+			if roots[i].D.Disjoint(roots[j].D) {
+				totalDSize := roots[i].D.Len() + roots[j].D.Len()
 
 				// 如果正好覆盖所有非共有行
 				if totalDSize == nonCRows {
@@ -264,11 +266,11 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 		for j := i + 1; j < len(roots); j++ {
 			for k := j + 1; k < len(roots); k++ {
 				// 检查三个D是否两两不相交
-				if !roots[i].D.HasIntersection(roots[j].D) &&
-					!roots[i].D.HasIntersection(roots[k].D) &&
-					!roots[j].D.HasIntersection(roots[k].D) {
+				if roots[i].D.Disjoint(roots[j].D) &&
+					roots[i].D.Disjoint(roots[k].D) &&
+					roots[j].D.Disjoint(roots[k].D) {
 
-					totalDSize := roots[i].D.Count() + roots[j].D.Count() + roots[k].D.Count()
+					totalDSize := roots[i].D.Len() + roots[j].D.Len() + roots[k].D.Len()
 
 					if totalDSize == nonCRows {
 						rules = append(rules, PerfectRule{
@@ -297,7 +299,7 @@ func (b *FieldChainBuilder) BuildChain(field string, rows []Row) *FieldChain {
 
 	fmt.Printf("  字段 %s: 找到 %d 个候选组合", field, len(candidates))
 	if len(candidates) > 0 {
-		fmt.Printf(" (最小D=%d)", candidates[0].dSet.Count())
+		fmt.Printf(" (最小D=%d)", candidates[0].dSet.Len())
 	}
 	fmt.Println()
 
@@ -343,10 +345,10 @@ func (b *FieldChainBuilder) findSingleValueCombinations(field string, rows []Row
 	for i, row := range rows {
 		val := strings.TrimSpace(row[field])
 		if set, exists := valueRows[val]; exists {
-			set.Set(i)
+			set.Add(i)
 		} else {
 			set = NewRowSet(b.totalRows)
-			set.Set(i)
+			set.Add(i)
 			valueRows[val] = set
 		}
 	}
@@ -355,21 +357,10 @@ func (b *FieldChainBuilder) findSingleValueCombinations(field string, rows []Row
 	for val, rowSet := range valueRows {
 		// 检查是否包含所有共有行
 		// 正确方法：commonSet ⊆ rowSet
-		containsAllCommon := true
+		tempSet := b.commonSet.Clone()
+		tempSet.Subtract(rowSet)
 
-		// 遍历所有行，检查共有行是否都在rowSet中
-		for i := 0; i < b.totalRows; i++ {
-			// 如果这是共有行
-			if b.commonSet.IntersectionCount(NewRowSetWithValue(b.totalRows, i)) > 0 {
-				// 检查是否在rowSet中
-				if rowSet.IntersectionCount(NewRowSetWithValue(b.totalRows, i)) == 0 {
-					containsAllCommon = false
-					break
-				}
-			}
-		}
-
-		if containsAllCommon {
+		if tempSet.Empty() {
 			// 计算独有行集合 D = rowSet - commonSet
 			dSet := rowSet.Clone()
 			dSet.Subtract(b.commonSet)
@@ -387,6 +378,6 @@ func (b *FieldChainBuilder) findSingleValueCombinations(field string, rows []Row
 // sortCandidatesByDSize 按D集合大小排序
 func (b *FieldChainBuilder) sortCandidatesByDSize(candidates []candidate) {
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].dSet.Count() < candidates[j].dSet.Count()
+		return candidates[i].dSet.Len() < candidates[j].dSet.Len()
 	})
 }

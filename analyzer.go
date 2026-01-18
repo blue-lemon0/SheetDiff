@@ -134,54 +134,6 @@ func buildRowKey(row Row, keyFields []string) string {
 	return strings.Join(parts, "|")
 }
 
-// getAllFields 获取所有非主键字段
-func getAllFields(row Row, keyFields []string) []string {
-	fields := make([]string, 0, len(row))
-
-	// 将主键字段转为map便于查找
-	keyMap := make(map[string]bool)
-	for _, key := range keyFields {
-		keyMap[key] = true
-	}
-
-	for field := range row {
-		if !keyMap[field] {
-			fields = append(fields, field)
-		}
-	}
-
-	return fields
-}
-
-// countFieldValues 统计字段取值频次
-func countFieldValues(rows []Row, field string) map[string]int {
-	counts := make(map[string]int)
-	for _, row := range rows {
-		if value, exists := row[field]; exists {
-			counts[value]++
-		}
-	}
-	return counts
-}
-
-// countFieldValuesInMatched 统计匹配行中字段取值频次
-func countFieldValuesInMatched(matched []MatchedPair, field string, fromMain bool) map[string]int {
-	counts := make(map[string]int)
-	for _, pair := range matched {
-		var row Row
-		if fromMain {
-			row = pair.MainRow
-		} else {
-			row = pair.RefRow
-		}
-
-		if value, exists := row[field]; exists {
-			counts[value]++
-		}
-	}
-	return counts
-}
-
 // AnalyzeFilterFields 分析可能的过滤字段
 func AnalyzeFilterFields(mainData, refData []Row, mainHeaders, refHeaders []string,
 	mainKeyFields, refKeyFields []string,

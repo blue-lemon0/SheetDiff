@@ -596,49 +596,6 @@ func writeDetails(f *excelize.File, result MatchResult, mainHeaders, refHeaders 
 	}
 }
 
-// writeAnalysis 写入差异分析
-func writeAnalysis(f *excelize.File, analysis []DiffAnalysis) {
-	startRow := 12
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow), "🔍 差异原因分析")
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", startRow+1), "字段")
-	f.SetCellValue("分析结果", fmt.Sprintf("B%d", startRow+1), "可疑取值")
-	f.SetCellValue("分析结果", fmt.Sprintf("C%d", startRow+1), "独有行占比")
-	f.SetCellValue("分析结果", fmt.Sprintf("D%d", startRow+1), "匹配行占比")
-	f.SetCellValue("分析结果", fmt.Sprintf("E%d", startRow+1), "影响度")
-	f.SetCellValue("分析结果", fmt.Sprintf("F%d", startRow+1), "类型")
-
-	for i, item := range analysis {
-		row := startRow + 2 + i
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), item.Field)
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), item.Value)
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("%.1f%%", item.OnlyMainPct*100))
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), fmt.Sprintf("%.1f%%", item.MatchedPct*100))
-		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.2f", item.Impact))
-
-		typeText := "仅主表有"
-		if item.Type == "only_ref" {
-			typeText = "仅参考表有"
-		}
-		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), typeText)
-	}
-}
-
-// 辅助函数
-func splitKeys(keys string) []string {
-	parts := strings.FieldsFunc(keys, func(r rune) bool {
-		return r == ',' || r == '，' || r == ';' || r == '；'
-	})
-
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
 func isEmptyRow(row Row) bool {
 	for _, v := range row {
 		if v != "" {

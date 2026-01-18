@@ -3,24 +3,25 @@ package main
 import "math/bits"
 
 // RowSet 行集合（bitset实现）
+// 用于高效存储和操作行索引集合
 type RowSet struct {
-	bits      []uint64
-	count     int
-	totalRows int
+	bits  []uint64 // 位图，每64行存储在一个uint64中
+	count int      // 集合中元素个数（1的位数）
+	size  int      // 位图总容量（支持的最大行数）
 }
 
-// NewRowSet 创建空集合
-func NewRowSet(totalRows int) *RowSet {
-	words := (totalRows + 63) / 64
+// NewRowSet 创建指定容量的空集合
+func NewRowSet(capacity int) *RowSet {
+	words := (capacity + 63) / 64 // 计算需要的uint64个数
 	return &RowSet{
-		bits:      make([]uint64, words),
-		totalRows: totalRows,
+		bits: make([]uint64, words),
+		size: capacity,
 	}
 }
 
-// Set 设置某行为1
-func (rs *RowSet) Set(row int) {
-	if row < 0 || row >= rs.totalRows {
+// Add 添加行到集合中
+func (rs *RowSet) Add(row int) {
+	if row < 0 || row >= rs.size {
 		return
 	}
 	word := row / 64
@@ -39,29 +40,31 @@ func (rs *RowSet) Clear() {
 	rs.count = 0
 }
 
-// Count 返回集合大小
-func (rs *RowSet) Count() int {
+// Len 返回集合中元素个数
+func (rs *RowSet) Len() int {
 	return rs.count
 }
 
-// IsEmpty 是否为空
-func (rs *RowSet) IsEmpty() bool {
+// Empty 判断集合是否为空
+func (rs *RowSet) Empty() bool {
 	return rs.count == 0
 }
 
-// Clone 深拷贝
+// Clone 创建集合的深拷贝
 func (rs *RowSet) Clone() *RowSet {
 	newBits := make([]uint64, len(rs.bits))
 	copy(newBits, rs.bits)
 	return &RowSet{
-		bits:      newBits,
-		count:     rs.count,
-		totalRows: rs.totalRows,
+		bits:  newBits,
+		count: rs.count,
+		size:  rs.size,
 	}
 }
 
-// IsSubsetOf 判断是否子集：this ⊆ other
-func (rs *RowSet) IsSubsetOf(other *RowSet) bool {
+// SubsetOf 判断当前集合是否是other的子集
+// 数学表达：this ⊆ other
+func (rs *RowSet) SubsetOf(other *RowSet) bool {
+	// 快速检查：如果当前集合更大，不可能是子集
 	if rs.count > other.count {
 		return false
 	}
@@ -71,13 +74,14 @@ func (rs *RowSet) IsSubsetOf(other *RowSet) bool {
 		minWords = len(other.bits)
 	}
 
+	// 检查this的每个1位，other是否也是1
 	for i := 0; i < minWords; i++ {
 		if rs.bits[i]&^other.bits[i] != 0 {
-			return false
+			return false // this有1而other是0
 		}
 	}
 
-	// 检查rs额外的高位字是否全0
+	// 检查this额外的高位字是否全0
 	for i := minWords; i < len(rs.bits); i++ {
 		if rs.bits[i] != 0 {
 			return false
@@ -87,10 +91,12 @@ func (rs *RowSet) IsSubsetOf(other *RowSet) bool {
 	return true
 }
 
-// HasIntersection 判断是否有交集
-func (rs *RowSet) HasIntersection(other *RowSet) bool {
+// Disjoint 判断两个集合是否不相交
+// 数学表达：this ∩ other = ∅
+func (rs *RowSet) Disjoint(other *RowSet) bool {
+	// 快速检查：如果任一集合为空，必然不相交
 	if rs.count == 0 || other.count == 0 {
-		return false
+		return true
 	}
 
 	minWords := len(rs.bits)
@@ -98,17 +104,19 @@ func (rs *RowSet) HasIntersection(other *RowSet) bool {
 		minWords = len(other.bits)
 	}
 
+	// 检查是否有同为1的位
 	for i := 0; i < minWords; i++ {
 		if rs.bits[i]&other.bits[i] != 0 {
-			return true
+			return false // 有交集
 		}
 	}
 
-	return false
+	return true
 }
 
-// IntersectionCount 计算交集大小
-func (rs *RowSet) IntersectionCount(other *RowSet) int {
+// IntersectCount 计算两个集合的交集大小
+// 数学表达：|this ∩ other|
+func (rs *RowSet) IntersectCount(other *RowSet) int {
 	count := 0
 	minWords := len(rs.bits)
 	if len(other.bits) < minWords {
@@ -121,7 +129,8 @@ func (rs *RowSet) IntersectionCount(other *RowSet) int {
 	return count
 }
 
-// UnionWith 合并集合
+// UnionWith 将other集合合并到当前集合（原地操作）
+// 数学表达：this = this ∪ other
 func (rs *RowSet) UnionWith(other *RowSet) {
 	// 确保bits长度一致
 	if len(rs.bits) < len(other.bits) {
@@ -137,7 +146,8 @@ func (rs *RowSet) UnionWith(other *RowSet) {
 	}
 }
 
-// Subtract 差集：this = this - other
+// Subtract 从当前集合中减去other集合（原地操作）
+// 数学表达：this = this - other
 func (rs *RowSet) Subtract(other *RowSet) {
 	minWords := len(rs.bits)
 	if len(other.bits) < minWords {
@@ -146,7 +156,36 @@ func (rs *RowSet) Subtract(other *RowSet) {
 
 	for i := 0; i < minWords; i++ {
 		old := rs.bits[i]
-		rs.bits[i] &^= other.bits[i]
+		rs.bits[i] &^= other.bits[i] // 按位清除操作
 		rs.count += bits.OnesCount64(rs.bits[i]) - bits.OnesCount64(old)
 	}
+}
+
+// Has 检查是否包含某行
+func (rs *RowSet) Has(row int) bool {
+	if row < 0 || row >= rs.size {
+		return false
+	}
+	word := row / 64
+	bit := uint64(1) << (row % 64)
+	return (rs.bits[word] & bit) != 0
+}
+
+// Capacity 返回集合容量
+func (rs *RowSet) Capacity() int {
+	return rs.size
+}
+
+// Reset 重置为指定容量的空集合（复用内存）
+func (rs *RowSet) Reset(capacity int) {
+	if capacity != rs.size {
+		words := (capacity + 63) / 64
+		rs.bits = make([]uint64, words)
+		rs.size = capacity
+	} else {
+		for i := range rs.bits {
+			rs.bits[i] = 0
+		}
+	}
+	rs.count = 0
 }
