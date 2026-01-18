@@ -165,6 +165,7 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 func WriteResults(f *excelize.File, result MatchResult,
 	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule,
 	mainFields, refFields []FilterFieldInfo,
+	mainChains, refChains []*FieldChain,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
@@ -178,8 +179,11 @@ func WriteResults(f *excelize.File, result MatchResult,
 	// 写入统计信息（第1-10行）
 	writeSummary(f, result, mainCount, refCount)
 
-	// 写入过滤字段分析（从第12行开始）
-	filterEndRow := writeFilterFields(f, mainFields, refFields, 12)
+	// 写入核心算法分析结果（从第12行开始）
+	chainEndRow := writeFieldChains(f, mainChains, refChains, result, mainCount, refCount, 12)
+
+	// 写入过滤字段分析（从链条分析结束行+2开始）
+	filterEndRow := writeFilterFields(f, mainFields, refFields, chainEndRow+2)
 
 	// 写入规则（从过滤字段分析结束行+2开始）
 	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, filterEndRow+2)
@@ -191,6 +195,232 @@ func WriteResults(f *excelize.File, result MatchResult,
 	f.SetActiveSheet(index)
 
 	return nil
+}
+
+// writeFieldChains 写入字段链条分析结果（核心算法输出）
+func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
+	result MatchResult, mainCount, refCount int, startRow int) int {
+	row := startRow
+
+	// 计算共有行和独有行数量
+	commonCount := len(result.Matched)
+	mainOnlyCount := len(result.OnlyMain)
+	refOnlyCount := len(result.OnlyRef)
+
+	// ========== 主表独有行分析 ==========
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表独有行过滤条件分析】")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+		fmt.Sprintf("基于共有行(%d行) vs 独有行(%d行)分析", commonCount, mainOnlyCount))
+	row++
+	row++ // 空一行
+
+	if len(mainChains) > 0 {
+		for _, chain := range mainChains {
+			row = writeChainDetail(f, chain, commonCount, mainOnlyCount, row)
+			row++ // 链条之间空一行
+		}
+	} else {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "未找到有效的过滤规律")
+		row++
+	}
+
+	row++ // 空一行
+
+	// ========== 参考表独有行分析 ==========
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表独有行过滤条件分析】")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+		fmt.Sprintf("基于共有行(%d行) vs 独有行(%d行)分析", commonCount, refOnlyCount))
+	row++
+	row++ // 空一行
+
+	if len(refChains) > 0 {
+		for _, chain := range refChains {
+			row = writeChainDetail(f, chain, commonCount, refOnlyCount, row)
+			row++ // 链条之间空一行
+		}
+	} else {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "未找到有效的过滤规律")
+		row++
+	}
+
+	return row
+}
+
+// writeChainDetail 写入单个字段链条的详细信息
+func writeChainDetail(f *excelize.File, chain *FieldChain,
+	commonCount, onlyCount int, startRow int) int {
+	row := startRow
+
+	// 链条标题
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+		fmt.Sprintf("字段链条: %s (共%d个规律)", chain.Field, len(chain.Nodes)))
+	setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+
+	// 表头
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "优先级")
+	f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "规律类型")
+	f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "条件")
+	f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "覆盖共有行")
+	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤独有行")
+	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "D集合大小")
+	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "推荐度")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+	row++
+
+	// 写入每个节点
+	for i, node := range chain.Nodes {
+		priority := i + 1
+		if node.IsRoot {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), fmt.Sprintf("🎯 [%d]", priority))
+		} else {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), fmt.Sprintf("   [%d]", priority))
+		}
+
+		// 规律类型
+		ruleType := detectRuleType(node.Values)
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), ruleType)
+
+		// 条件
+		condition := formatCondition(node.Field, node.Values)
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), condition)
+
+		// 覆盖共有行（始终100%，因为所有节点都覆盖所有共有行）
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), fmt.Sprintf("100%% (%d/%d)", commonCount, commonCount))
+
+		// 误伤独有行
+		dSize := node.D.Len()
+		dPct := 0.0
+		if onlyCount > 0 {
+			dPct = float64(dSize) / float64(onlyCount) * 100
+		}
+		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.1f%% (%d/%d)", dPct, dSize, onlyCount))
+
+		// D集合大小
+		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), dSize)
+
+		// 推荐度
+		recommendation := getRecommendation(dSize, dPct, node.IsRoot)
+		f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), recommendation)
+
+		// 如果是完美规律（D=0），高亮整行
+		if dSize == 0 {
+			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+		}
+
+		row++
+	}
+
+	return row
+}
+
+// detectRuleType 检测规律类型
+func detectRuleType(values []string) string {
+	if len(values) == 0 {
+		return "未知"
+	}
+
+	// 检查是否所有值都以*结尾（前缀规律）
+	allPrefix := true
+	for _, v := range values {
+		if !strings.HasSuffix(v, "*") {
+			allPrefix = false
+			break
+		}
+	}
+
+	// 检查是否是数值范围（包含>=、<=等）
+	hasComparator := false
+	for _, v := range values {
+		if strings.Contains(v, ">=") || strings.Contains(v, "<=") ||
+			strings.Contains(v, ">") || strings.Contains(v, "<") {
+			hasComparator = true
+			break
+		}
+	}
+
+	if hasComparator {
+		return "数值范围"
+	} else if allPrefix && len(values) > 1 {
+		return "前缀枚举"
+	} else if allPrefix && len(values) == 1 {
+		return "前缀匹配"
+	} else if len(values) > 1 {
+		return "枚举"
+	} else {
+		return "等于"
+	}
+}
+
+// formatCondition 格式化条件
+func formatCondition(field string, values []string) string {
+	if len(values) == 0 {
+		return field
+	}
+
+	if len(values) == 1 {
+		return fmt.Sprintf("%s = %s", field, values[0])
+	}
+
+	// 多个值的情况
+	if len(values) <= 3 {
+		return fmt.Sprintf("%s ∈ {%s}", field, strings.Join(values, ", "))
+	} else {
+		// 超过3个值，只显示前3个
+		preview := strings.Join(values[:3], ", ")
+		return fmt.Sprintf("%s ∈ {%s, ...} (共%d个)", field, preview, len(values))
+	}
+}
+
+// getRecommendation 获取推荐度
+func getRecommendation(dSize int, dPct float64, isRoot bool) string {
+	if dSize == 0 {
+		return "⭐⭐⭐⭐⭐ 完美！"
+	} else if dPct < 5 {
+		return "⭐⭐⭐⭐ 优秀"
+	} else if dPct < 15 {
+		return "⭐⭐⭐ 良好"
+	} else if dPct < 30 {
+		return "⭐⭐ 一般"
+	} else {
+		return "⭐ 较差"
+	}
+}
+
+// setHeaderStyle 设置表头样式
+func setHeaderStyle(f *excelize.File, sheet, cell string) {
+	style, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 11},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Alignment: &excelize.Alignment{
+			Horizontal: "left",
+			Vertical:   "center",
+		},
+	})
+	f.SetCellStyle(sheet, cell, cell, style)
+}
+
+// setBoldStyle 设置加粗样式
+func setBoldStyle(f *excelize.File, sheet, cell string) {
+	style, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10},
+	})
+	f.SetCellStyle(sheet, cell, cell, style)
+}
+
+// setGreenStyle 设置绿色背景样式（完美规律）
+func setGreenStyle(f *excelize.File, sheet, cellRange string) {
+	style, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true},
+	})
+	f.SetCellStyle(sheet, cellRange, cellRange, style)
 }
 
 // writeFilterFields 写入过滤字段分析

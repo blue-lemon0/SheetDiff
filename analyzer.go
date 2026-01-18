@@ -13,41 +13,43 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 		OnlyRef:  make([]Row, 0),
 	}
 
-	// 构建主表的主键映射
-	mainMap := make(map[string]Row)
-	for _, row := range mainData {
+	// 构建主表的主键映射（保留索引）
+	mainMap := make(map[string]int)
+	for i, row := range mainData {
 		key := buildRowKey(row, config.MainKeys)
 		if key != "" {
-			mainMap[key] = row
+			mainMap[key] = i
 		}
 	}
 
-	// 构建参考表的主键映射
-	refMap := make(map[string]Row)
-	for _, row := range refData {
+	// 构建参考表的主键映射（保留索引）
+	refMap := make(map[string]int)
+	for i, row := range refData {
 		key := buildRowKey(row, config.RefKeys)
 		if key != "" {
-			refMap[key] = row
+			refMap[key] = i
 		}
 	}
 
 	// 找出匹配的行
-	for key, mainRow := range mainMap {
-		if refRow, exists := refMap[key]; exists {
+	for key, mainIdx := range mainMap {
+		if refIdx, exists := refMap[key]; exists {
 			result.Matched = append(result.Matched, MatchedPair{
-				MainRow: mainRow,
-				RefRow:  refRow,
-				Key:     key,
+				MainRow:   mainData[mainIdx],
+				RefRow:    refData[refIdx],
+				Key:       key,
+				MainIndex: mainIdx,
+				RefIndex:  refIdx,
 			})
 			delete(refMap, key) // 从参考表map中移除，剩下的就是仅参考表有的
 		} else {
-			result.OnlyMain = append(result.OnlyMain, mainRow)
+			result.OnlyMain = append(result.OnlyMain, mainData[mainIdx])
 		}
 	}
 
 	// 剩下的参考表行就是仅参考表有的
-	for _, refRow := range refMap {
-		result.OnlyRef = append(result.OnlyRef, refRow)
+	for _, refIdx := range refMap {
+		result.OnlyRef = append(result.OnlyRef, refData[refIdx])
 	}
 
 	return result
@@ -248,4 +250,75 @@ func mapFieldToMain(refField string, mappings []FieldMapping) string {
 		}
 	}
 	return refField
+}
+
+// ========== 核心算法调用 ==========
+
+// AnalyzeRulesForBothSheets 分析两个sheet各自的过滤规则
+// 基于共有行和独有行，为每个sheet独立分析过滤条件
+func AnalyzeRulesForBothSheets(result MatchResult, mainData, refData []Row,
+	mainHeaders, refHeaders, mainKeyFields, refKeyFields []string) (
+	mainChains []*FieldChain, refChains []*FieldChain) {
+
+	// 1. 分析主表的过滤规则
+	mainChains = analyzeSheetRules(mainData, mainHeaders, mainKeyFields, result.Matched, true)
+
+	// 2. 分析参考表的过滤规则
+	refChains = analyzeSheetRules(refData, refHeaders, refKeyFields, result.Matched, false)
+
+	return mainChains, refChains
+}
+
+// analyzeSheetRules 分析单个sheet的过滤规则
+func analyzeSheetRules(data []Row, headers, keyFields []string,
+	matched []MatchedPair, isMainSheet bool) []*FieldChain {
+
+	if len(data) == 0 {
+		return nil
+	}
+
+	// 1. 构建共有行集合
+	commonSet := NewRowSet(len(data))
+	for _, pair := range matched {
+		if isMainSheet {
+			commonSet.Add(pair.MainIndex)
+		} else {
+			commonSet.Add(pair.RefIndex)
+		}
+	}
+
+	// 2. 准备分析用的数据（移除主键字段）
+	analysisRows := make([]Row, len(data))
+	for i, row := range data {
+		filteredRow := Row{}
+		for k, v := range row {
+			// 检查是否是主键字段
+			isKey := false
+			for _, key := range keyFields {
+				if k == key {
+					isKey = true
+					break
+				}
+			}
+			// 只保留非主键字段
+			if !isKey {
+				filteredRow[k] = v
+			}
+		}
+		analysisRows[i] = filteredRow
+	}
+
+	// 3. 为每个非主键字段构建链条
+	finder := NewRuleFinder()
+	chains := finder.buildAllChains(analysisRows, commonSet)
+
+	// 4. 过滤掉没有有效节点的链条
+	var validChains []*FieldChain
+	for _, chain := range chains {
+		if chain != nil && len(chain.Nodes) > 0 {
+			validChains = append(validChains, chain)
+		}
+	}
+
+	return validChains
 }

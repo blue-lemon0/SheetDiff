@@ -30,9 +30,11 @@ type MatchResult struct {
 
 // MatchedPair 匹配的行对
 type MatchedPair struct {
-	MainRow Row
-	RefRow  Row
-	Key     string
+	MainRow   Row
+	RefRow    Row
+	Key       string
+	MainIndex int // 主表中的行索引
+	RefIndex  int // 参考表中的行索引
 }
 
 // DiffAnalysis 差异分析结果
