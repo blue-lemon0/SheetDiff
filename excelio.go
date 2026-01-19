@@ -495,7 +495,11 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 	// 链条标题
 	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
 		fmt.Sprintf("过滤条件链: %s (共%d个规律) - %s", chain.Field, len(chain.Nodes), treeInfo))
-	setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	if treeInfo == "未归类" {
+		setGrayStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	} else {
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	}
 	row++
 
 	// 表头
@@ -506,7 +510,18 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤率")
 	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "推荐度")
 	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "归属")
-	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+
+	// 先设置基础样式
+	if treeInfo == "未归类" {
+		// 未归类：灰色样式
+		for col := 'A'; col <= 'G'; col++ {
+			cell := fmt.Sprintf("%c%d", col, row)
+			setGrayStyle(f, "分析结果", cell)
+		}
+	} else {
+		// 已归类：表头样式
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+	}
 	row++
 
 	// 写入每个节点
@@ -572,6 +587,12 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 		// 如果是完美规律（D=0），高亮整行
 		if dSize == 0 {
 			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+		} else if treeInfo == "未归类" || belonging == "未归类" {
+			// 逐一设置每个单元格的灰色样式
+			for col := 'A'; col <= 'G'; col++ {
+				cell := fmt.Sprintf("%c%d", col, row)
+				setGrayStyle(f, "分析结果", cell)
+			}
 		}
 
 		row++
@@ -673,6 +694,14 @@ func setGreenStyle(f *excelize.File, sheet, cellRange string) {
 	style, _ := f.NewStyle(&excelize.Style{
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
 		Font: &excelize.Font{Bold: true},
+	})
+	f.SetCellStyle(sheet, cellRange, cellRange, style)
+}
+
+// setGrayStyle 设置灰色字体样式（未归类项目）
+func setGrayStyle(f *excelize.File, sheet, cellRange string) {
+	style, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "#666666"},
 	})
 	f.SetCellStyle(sheet, cellRange, cellRange, style)
 }
