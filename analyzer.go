@@ -54,61 +54,6 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 	return result
 }
 
-// AnalyzeDifferences 分析差异原因
-func AnalyzeDifferences(result MatchResult, config Config) ([]Rule, []Rule, []Rule, []Rule) {
-	var mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule
-
-	// 提取数据
-	mainCommonRows := extractCommonRows(result.Matched, true)
-	refCommonRows := extractCommonRows(result.Matched, false)
-
-	// 1. 分析主表独有行特征
-	if len(result.OnlyMain) > 0 && len(mainCommonRows) > 0 {
-		mainOnlyRules = findPureFeatures(result.OnlyMain, mainCommonRows, config.MainKeys)
-		setRuleType(mainOnlyRules, "主表独有")
-	}
-
-	// 2. 分析主表共有行特征
-	if len(mainCommonRows) > 0 && len(result.OnlyMain) > 0 {
-		mainCommonRules = findPureFeatures(mainCommonRows, result.OnlyMain, config.MainKeys)
-		setRuleType(mainCommonRules, "主表共有")
-	}
-
-	// 3. 分析参考表独有行特征
-	if len(result.OnlyRef) > 0 && len(refCommonRows) > 0 {
-		refOnlyRules = findPureFeatures(result.OnlyRef, refCommonRows, config.RefKeys)
-		setRuleType(refOnlyRules, "参考表独有")
-	}
-
-	// 4. 分析参考表共有行特征
-	if len(refCommonRows) > 0 && len(result.OnlyRef) > 0 {
-		refCommonRules = findPureFeatures(refCommonRows, result.OnlyRef, config.RefKeys)
-		setRuleType(refCommonRules, "参考表共有")
-	}
-
-	return mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules
-}
-
-// setRuleType 设置规则类型
-func setRuleType(rules []Rule, ruleType string) {
-	for i := range rules {
-		rules[i].RuleType = ruleType
-	}
-}
-
-// extractCommonRows 从匹配行中提取共有行
-func extractCommonRows(matched []MatchedPair, fromMain bool) []Row {
-	var rows []Row
-	for _, pair := range matched {
-		if fromMain {
-			rows = append(rows, pair.MainRow)
-		} else {
-			rows = append(rows, pair.RefRow)
-		}
-	}
-	return rows
-}
-
 // buildRowKey 构建行的主键字符串
 func buildRowKey(row Row, keyFields []string) string {
 	parts := make([]string, 0, len(keyFields))

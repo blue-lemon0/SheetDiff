@@ -32,16 +32,12 @@ func RunAnalysis(excelFile string) error {
 	// 5. 主键匹配
 	result := MatchByKeys(mainData, refData, config)
 
-	// 6. 差异分析
-	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules := AnalyzeDifferences(result, config)
-
-	// 8. 核心算法：分析过滤规则（字段链条 + 森林 + 完美规则）
+	// 6. 核心算法：分析过滤规则（字段链条 + 森林 + 完美规则）
 	mainRuleResult, refRuleResult := AnalyzeRulesForBothSheets(result, mainData, refData,
 		mainHeaders, refHeaders, config.MainKeys, config.RefKeys)
 
 	// 9. 输出结果
 	if err := WriteResults(f, result,
-		mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules,
 		mainRuleResult, refRuleResult,
 		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)

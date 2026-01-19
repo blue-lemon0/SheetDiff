@@ -163,7 +163,6 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 
 // WriteResults 写入分析结果
 func WriteResults(f *excelize.File, result MatchResult,
-	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule,
 	mainRuleResult, refRuleResult RuleAnalysisResult,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
@@ -181,11 +180,8 @@ func WriteResults(f *excelize.File, result MatchResult,
 	// 写入核心算法分析结果（从第12行开始）
 	chainEndRow := writeRuleAnalysis(f, mainRuleResult, refRuleResult, result, mainCount, refCount, 12)
 
-	// 写入规则（从链条分析结束行+2开始）
-	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, chainEndRow+2)
-
-	// 写入详细差异样本（从规则结束行+2开始）
-	writeDetails(f, result, mainHeaders, refHeaders, ruleEndRow+2)
+	// 写入详细差异样本（从链条分析结束行+2开始）
+	writeDetails(f, result, mainHeaders, refHeaders, chainEndRow+2)
 
 	// 设置活动sheet
 	f.SetActiveSheet(index)
@@ -623,127 +619,6 @@ func boolToText(b bool) string {
 		return "是"
 	}
 	return "否"
-}
-
-// writeAllRules 写入所有规则，返回最后使用的行号
-func writeAllRules(f *excelize.File, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule, startRow int) int {
-	row := startRow
-
-	// 写入主表独有行规则
-	if len(mainOnlyRules) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表-独有行特征】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "取值列表")
-		row++
-
-		// 数据行
-		for _, rule := range mainOnlyRules {
-			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
-			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
-			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
-
-			// 写入所有取值（从D列开始）
-			for i, val := range rule.Values {
-				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
-				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
-			}
-			row++
-		}
-
-		row++ // 空一行
-	}
-
-	// 写入主表共有行规则
-	if len(mainCommonRules) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表-共有行特征】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "取值列表")
-		row++
-
-		// 数据行
-		for _, rule := range mainCommonRules {
-			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
-			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
-			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
-
-			// 写入所有取值（从D列开始）
-			for i, val := range rule.Values {
-				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
-				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
-			}
-			row++
-		}
-
-		row++ // 空一行
-	}
-
-	// 写入参考表独有行规则
-	if len(refOnlyRules) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表-独有行特征】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "取值列表")
-		row++
-
-		// 数据行
-		for _, rule := range refOnlyRules {
-			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
-			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
-			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
-
-			// 写入所有取值（从D列开始）
-			for i, val := range rule.Values {
-				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
-				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
-			}
-			row++
-		}
-
-		row++ // 空一行
-	}
-
-	// 写入参考表共有行规则
-	if len(refCommonRules) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表-共有行特征】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "动作")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "值/特征")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "取值列表")
-		row++
-
-		// 数据行
-		for _, rule := range refCommonRules {
-			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), rule.Field)
-			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), rule.Action)
-			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), rule.Pattern)
-
-			// 写入所有取值（从D列开始）
-			for i, val := range rule.Values {
-				col, _ := excelize.ColumnNumberToName(i + 4) // D列=4
-				f.SetCellValue("分析结果", fmt.Sprintf("%s%d", col, row), val)
-			}
-			row++
-		}
-	}
-
-	return row
 }
 
 // writeSummary 写入统计信息
