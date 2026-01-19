@@ -558,14 +558,8 @@ func formatCondition(field string, values []string) string {
 		return fmt.Sprintf("%s = %s", field, values[0])
 	}
 
-	// 多个值的情况
-	if len(values) <= 3 {
-		return fmt.Sprintf("%s ∈ {%s}", field, strings.Join(values, ", "))
-	} else {
-		// 超过3个值，只显示前3个
-		preview := strings.Join(values[:3], ", ")
-		return fmt.Sprintf("%s ∈ {%s, ...} (共%d个)", field, preview, len(values))
-	}
+	// 多个值的情况，总是显示完整的枚举值
+	return fmt.Sprintf("%s ∈ {%s}", field, strings.Join(values, ", "))
 }
 
 // getRecommendation 获取推荐度
