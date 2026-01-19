@@ -361,10 +361,9 @@ func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, s
 		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), formatCondition(tree.Root.Field, tree.Root.Values))
 		row++
 
-		coverage := float64(commonCount) / float64(commonCount+onlyCount) * 100
 		hit := float64(rootDSize) / float64(onlyCount) * 100
 		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row),
-			fmt.Sprintf("覆盖共有: %.1f%%, 误伤独有: %.1f%%", coverage, hit))
+			fmt.Sprintf("误伤独有行数=%d, 误伤率: %.1f%%", rootDSize, hit))
 		row++
 
 		// 根节点推荐度
