@@ -543,18 +543,29 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 
 		// 归属信息
 		belonging := ""
-		if node.IsRoot {
-			if nodeToTree != nil {
-				if _, exists := nodeToTree[node]; exists {
-					belonging = "树根节点"
+		if nodeToTree != nil {
+			if tree, exists := nodeToTree[node]; exists {
+				// 找到树的根节点
+				current := tree
+				for current.Parent != nil {
+					current = current.Parent
+				}
+				// 使用根节点的条件作为树的标识
+				treeRootCondition := formatCondition(current.Root.Field, current.Root.Values)
+				if node == current.Root {
+					belonging = fmt.Sprintf("树根节点 (树: %s)", treeRootCondition)
 				} else {
-					belonging = "未归类"
+					belonging = fmt.Sprintf("非根节点 (树: %s)", treeRootCondition)
 				}
 			} else {
-				belonging = "树根节点"
+				belonging = "未归类"
 			}
 		} else {
-			belonging = "非根节点"
+			if node.IsRoot {
+				belonging = "树根节点"
+			} else {
+				belonging = "非根节点"
+			}
 		}
 		f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), belonging)
 
