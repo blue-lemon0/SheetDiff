@@ -17,7 +17,7 @@ type FieldNode struct {
 	IsRoot bool
 }
 
-// FieldChain 字段链条
+// FieldChain 过滤条件链
 type FieldChain struct {
 	Field string
 	Nodes []*FieldNode
@@ -66,7 +66,7 @@ func NewRuleFinder() *RuleFinder {
 
 // FindRules 发现规则（主要入口）
 func (rf *RuleFinder) FindRules(rows []Row, commonSet *RowSet) []PerfectRule {
-	// 1. 构建所有字段链条
+	// 1. 构建所有过滤条件链
 	chains := rf.buildAllChains(rows, commonSet)
 
 	// 2. 建立支配关系森林
@@ -78,7 +78,7 @@ func (rf *RuleFinder) FindRules(rows []Row, commonSet *RowSet) []PerfectRule {
 	return rules
 }
 
-// buildAllChains 构建所有字段链条
+// buildAllChains 构建所有过滤条件链
 func (rf *RuleFinder) buildAllChains(rows []Row, commonSet *RowSet) []*FieldChain {
 	// 获取所有字段名
 	if len(rows) == 0 {
@@ -115,12 +115,12 @@ func (rf *RuleFinder) buildForest(chains []*FieldChain) []*Tree {
 	}
 
 	forest := rf.buildTreesFromRoots(roots)
-	
+
 	// 按根节点的D大小排序（从小到大）
 	sort.Slice(forest, func(a, b int) bool {
 		return forest[a].Root.D.Len() < forest[b].Root.D.Len()
 	})
-	
+
 	return forest
 }
 
@@ -270,7 +270,7 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 				}
 			}
 		}
-		
+
 		sizeB := 0
 		for _, cond := range rules[b].Conditions {
 			// 找到对应的FieldNode
@@ -281,7 +281,7 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 				}
 			}
 		}
-		
+
 		return sizeA < sizeB
 	})
 

@@ -36,7 +36,7 @@
 - 所有非主键字段列表
 
 输出：
-- 每个字段的 FieldChain（字段链条）
+- 每个字段的 FieldChain（过滤条件链）
 ```
 
 ### 第二步：字段级别的规律提炼
@@ -95,7 +95,7 @@
   → D集合：空（完美）✅
 ```
 
-### 第三步：构建字段链条（FieldChain）
+### 第三步：构建过滤条件链（FieldChain）
 
 对每个字段，将提炼出的规律按独有行集合大小排序，形成链条：
 
@@ -192,7 +192,7 @@ type FieldNode struct {
     IsRoot bool      // 是否为链条根节点（最优）
 }
 
-// FieldChain - 字段链条（一个字段的多个规律）
+// FieldChain - 过滤条件链（一个字段的多个规律）
 type FieldChain struct {
     Field string       // 字段名
     Nodes []*FieldNode // 规律节点列表（按D大小排序）
@@ -222,7 +222,7 @@ func analyzePrefixEnumPatterns(stats *FieldStats, commonSet *RowSet, maxPrefixes
 
 ## 🎯 输出格式
 
-### 对每个Sheet，输出字段链条列表
+### 对每个Sheet，输出过滤条件链列表
 
 ```
 主表过滤条件分析结果：

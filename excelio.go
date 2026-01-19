@@ -230,9 +230,9 @@ func writeRuleAnalysis(f *excelize.File, mainResult, refResult RuleAnalysisResul
 		row += 2 // 空两行
 	}
 
-	// 输出主表的字段链条详情
+	// 输出主表的过滤条件链详情
 	if len(mainResult.Chains) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 字段链条详情 🔗")
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 过滤条件链详情 🔗")
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 		for _, chain := range mainResult.Chains {
@@ -277,9 +277,9 @@ func writeRuleAnalysis(f *excelize.File, mainResult, refResult RuleAnalysisResul
 		row += 2 // 空两行
 	}
 
-	// 输出参考表的字段链条详情
+	// 输出参考表的过滤条件链详情
 	if len(refResult.Chains) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 字段链条详情 🔗")
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 过滤条件链详情 🔗")
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 		for _, chain := range refResult.Chains {
@@ -387,7 +387,7 @@ func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, s
 	return row
 }
 
-// writeFieldChains 写入字段链条分析结果（核心算法输出）- 已废弃，被writeRuleAnalysis替代
+// writeFieldChains 写入过滤条件链分析结果（核心算法输出）- 已废弃，被writeRuleAnalysis替代
 func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 	result MatchResult, mainCount, refCount int, startRow int) int {
 	row := startRow
@@ -442,14 +442,14 @@ func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 	return row
 }
 
-// writeChainDetail 写入单个字段链条的详细信息
+// writeChainDetail 写入单个过滤条件链的详细信息
 func writeChainDetail(f *excelize.File, chain *FieldChain,
 	commonCount, onlyCount int, startRow int) int {
 	row := startRow
 
 	// 链条标题
 	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
-		fmt.Sprintf("字段链条: %s (共%d个规律)", chain.Field, len(chain.Nodes)))
+		fmt.Sprintf("过滤条件链: %s (共%d个规律)", chain.Field, len(chain.Nodes)))
 	setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 	row++
 

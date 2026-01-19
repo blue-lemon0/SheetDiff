@@ -32,7 +32,7 @@ func RunAnalysis(excelFile string) error {
 	// 5. 主键匹配
 	result := MatchByKeys(mainData, refData, config)
 
-	// 6. 核心算法：分析过滤规则（字段链条 + 森林 + 完美规则）
+	// 6. 核心算法：分析过滤规则（过滤条件链 + 森林 + 完美规则）
 	mainRuleResult, refRuleResult := AnalyzeRulesForBothSheets(result, mainData, refData,
 		mainHeaders, refHeaders, config.MainKeys, config.RefKeys)
 

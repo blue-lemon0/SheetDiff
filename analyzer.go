@@ -71,7 +71,7 @@ func buildRowKey(row Row, keyFields []string) string {
 
 // RuleAnalysisResult 规则分析结果
 type RuleAnalysisResult struct {
-	Chains       []*FieldChain // 字段链条
+	Chains       []*FieldChain // 过滤条件链
 	Forest       []*Tree       // 支配关系森林
 	PerfectRules []PerfectRule // 完美规则组合
 }
