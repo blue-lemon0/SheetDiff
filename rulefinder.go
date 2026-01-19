@@ -1,5 +1,7 @@
 package main
 
+import "sort"
+
 // ========== 基本数据类型 ==========
 
 // Row 数据行类型
@@ -196,7 +198,6 @@ func (rf *RuleFinder) findPerfectRules(forest []*Tree, commonCount, totalRows in
 // searchRuleCombinations 搜索规则组合
 func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, totalRows int) []PerfectRule {
 	var rules []PerfectRule
-	nonCRows := totalRows - commonCount
 
 	// 1. 检查单个完美字段（D为空）
 	for _, root := range roots {
@@ -215,25 +216,16 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 		for j := i + 1; j < len(roots); j++ {
 			// 检查两个D是否不相交
 			if roots[i].D.Disjoint(roots[j].D) {
-				totalDSize := roots[i].D.Len() + roots[j].D.Len()
-
-				// 如果正好覆盖所有非共有行
-				if totalDSize == nonCRows {
-					rules = append(rules, PerfectRule{
-						Conditions: []RuleCondition{
-							{Field: roots[i].Field, Values: roots[i].Values},
-							{Field: roots[j].Field, Values: roots[j].Values},
-						},
-						Covered:     commonCount,
-						TotalCommon: commonCount,
-					})
-				}
+				rules = append(rules, PerfectRule{
+					Conditions: []RuleCondition{
+						{Field: roots[i].Field, Values: roots[i].Values},
+						{Field: roots[j].Field, Values: roots[j].Values},
+					},
+					Covered:     commonCount,
+					TotalCommon: commonCount,
+				})
 			}
 		}
-	}
-
-	if len(rules) > 0 {
-		return rules
 	}
 
 	// 3. 尝试三个字段的组合
@@ -245,23 +237,59 @@ func (rf *RuleFinder) searchRuleCombinations(roots []*FieldNode, commonCount, to
 					roots[i].D.Disjoint(roots[k].D) &&
 					roots[j].D.Disjoint(roots[k].D) {
 
-					totalDSize := roots[i].D.Len() + roots[j].D.Len() + roots[k].D.Len()
-
-					if totalDSize == nonCRows {
-						rules = append(rules, PerfectRule{
-							Conditions: []RuleCondition{
-								{Field: roots[i].Field, Values: roots[i].Values},
-								{Field: roots[j].Field, Values: roots[j].Values},
-								{Field: roots[k].Field, Values: roots[k].Values},
-							},
-							Covered:     commonCount,
-							TotalCommon: commonCount,
-						})
-					}
+					rules = append(rules, PerfectRule{
+						Conditions: []RuleCondition{
+							{Field: roots[i].Field, Values: roots[i].Values},
+							{Field: roots[j].Field, Values: roots[j].Values},
+							{Field: roots[k].Field, Values: roots[k].Values},
+						},
+						Covered:     commonCount,
+						TotalCommon: commonCount,
+					})
 				}
 			}
 		}
 	}
 
+	// 4. 按组合后的D集合大小排序（越小越好）
+	sort.Slice(rules, func(a, b int) bool {
+		sizeA := 0
+		for _, cond := range rules[a].Conditions {
+			// 找到对应的FieldNode
+			for _, root := range roots {
+				if root.Field == cond.Field && equalStringSlices(root.Values, cond.Values) {
+					sizeA += root.D.Len()
+					break
+				}
+			}
+		}
+		
+		sizeB := 0
+		for _, cond := range rules[b].Conditions {
+			// 找到对应的FieldNode
+			for _, root := range roots {
+				if root.Field == cond.Field && equalStringSlices(root.Values, cond.Values) {
+					sizeB += root.D.Len()
+					break
+				}
+			}
+		}
+		
+		return sizeA < sizeB
+	})
+
 	return rules
+}
+
+// equalStringSlices 比较两个字符串切片是否相等
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
