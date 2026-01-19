@@ -61,7 +61,8 @@ func buildRowKey(row Row, keyFields []string) string {
 		if value, exists := row[field]; exists {
 			parts = append(parts, strings.TrimSpace(value))
 		} else {
-			parts = append(parts, "") // 字段不存在时用空值
+			// 字段不存在时，直接返回空字符串，表示主键无效
+			return ""
 		}
 	}
 	return strings.Join(parts, "|")

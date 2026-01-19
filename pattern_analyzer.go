@@ -339,6 +339,10 @@ func analyzeRangePatterns(stats *FieldStats, commonSet *RowSet) []*FieldNode {
 // ========== 工具函数 ==========
 
 func coversAllCommon(rowSet, commonSet *RowSet) bool {
+	// 当commonSet为空时，直接返回false，避免生成无效的过滤条件
+	if commonSet.Empty() {
+		return false
+	}
 	temp := commonSet.Clone()
 	temp.Subtract(rowSet)
 	return temp.Empty()
