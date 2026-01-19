@@ -36,24 +36,3 @@ type MatchedPair struct {
 	MainIndex int // 主表中的行索引
 	RefIndex  int // 参考表中的行索引
 }
-
-// DiffAnalysis 差异分析结果
-type DiffAnalysis struct {
-	Field       string  // 字段名
-	Value       string  // 取值
-	OnlyMainPct float64 // 在仅主表有中的占比
-	MatchedPct  float64 // 在匹配行中的占比
-	Impact      float64 // 影响度
-	Type        string  // "only_main" 或 "only_ref"
-}
-
-// Rule 规则
-type Rule struct {
-	Field    string   // 字段名
-	Action   string   // 动作：等于/开头是/结尾是/包含/在列表中
-	Pattern  string   // 模式值
-	Values   []string // 所有取值
-	RuleType string   // 规则类型："主表独有"/"主表共有"/"参考表独有"/"参考表共有"
-}
-
-
