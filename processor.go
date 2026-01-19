@@ -39,15 +39,15 @@ func RunAnalysis(excelFile string) error {
 	mainFields, refFields := AnalyzeFilterFields(mainData, refData, mainHeaders, refHeaders,
 		config.MainKeys, config.RefKeys, config.FieldMappings)
 
-	// 8. 核心算法：分析过滤规则（字段链条）
-	mainChains, refChains := AnalyzeRulesForBothSheets(result, mainData, refData,
+	// 8. 核心算法：分析过滤规则（字段链条 + 森林 + 完美规则）
+	mainRuleResult, refRuleResult := AnalyzeRulesForBothSheets(result, mainData, refData,
 		mainHeaders, refHeaders, config.MainKeys, config.RefKeys)
 
 	// 9. 输出结果
 	if err := WriteResults(f, result,
 		mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules,
 		mainFields, refFields,
-		mainChains, refChains,
+		mainRuleResult, refRuleResult,
 		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
 		return fmt.Errorf("写入结果失败: %w", err)
 	}

@@ -165,7 +165,7 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 func WriteResults(f *excelize.File, result MatchResult,
 	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule,
 	mainFields, refFields []FilterFieldInfo,
-	mainChains, refChains []*FieldChain,
+	mainRuleResult, refRuleResult RuleAnalysisResult,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
 	f.DeleteSheet("分析结果")
@@ -180,7 +180,7 @@ func WriteResults(f *excelize.File, result MatchResult,
 	writeSummary(f, result, mainCount, refCount)
 
 	// 写入核心算法分析结果（从第12行开始）
-	chainEndRow := writeFieldChains(f, mainChains, refChains, result, mainCount, refCount, 12)
+	chainEndRow := writeRuleAnalysis(f, mainRuleResult, refRuleResult, result, mainCount, refCount, 12)
 
 	// 写入过滤字段分析（从链条分析结束行+2开始）
 	filterEndRow := writeFilterFields(f, mainFields, refFields, chainEndRow+2)
@@ -197,7 +197,205 @@ func WriteResults(f *excelize.File, result MatchResult,
 	return nil
 }
 
-// writeFieldChains 写入字段链条分析结果（核心算法输出）
+// writeRuleAnalysis 写入完整规则分析结果（链条 + 森林 + 完美规则）
+func writeRuleAnalysis(f *excelize.File, mainResult, refResult RuleAnalysisResult,
+	matchResult MatchResult, mainCount, refCount int, startRow int) int {
+	row := startRow
+
+	// 计算共有行和独有行数量
+	commonCount := len(matchResult.Matched)
+	mainOnlyCount := len(matchResult.OnlyMain)
+	refOnlyCount := len(matchResult.OnlyRef)
+
+	// ========== 主表独有行分析 ==========
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表独有行过滤条件分析】")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+		fmt.Sprintf("基于共有行(%d行) vs 独有行(%d行)分析", commonCount, mainOnlyCount))
+	row++
+	row++ // 空一行
+
+	// 输出主表的完美规则（最优）
+	if len(mainResult.PerfectRules) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "✨ 推荐过滤条件组合 ✨")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		row = writePerfectRules(f, mainResult.PerfectRules, commonCount, mainOnlyCount, row)
+		row += 2 // 空两行
+	}
+
+	// 输出主表的森林结构
+	if len(mainResult.Forest) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🌲 支配关系森林 🌲")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+			fmt.Sprintf("（根节点%d个，D集合更小的节点支配D集合更大的节点）", len(mainResult.Forest)))
+		row++
+		row = writeForest(f, mainResult.Forest, commonCount, mainOnlyCount, row)
+		row += 2 // 空两行
+	}
+
+	// 输出主表的字段链条详情
+	if len(mainResult.Chains) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 字段链条详情 🔗")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		for _, chain := range mainResult.Chains {
+			row = writeChainDetail(f, chain, commonCount, mainOnlyCount, row)
+			row++ // 链条之间空一行
+		}
+	} else {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "未找到有效的过滤规律")
+		row++
+	}
+
+	row += 2 // 空两行
+
+	// ========== 参考表独有行分析 ==========
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表独有行过滤条件分析】")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+		fmt.Sprintf("基于共有行(%d行) vs 独有行(%d行)分析", commonCount, refOnlyCount))
+	row++
+	row++ // 空一行
+
+	// 输出参考表的完美规则（最优）
+	if len(refResult.PerfectRules) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "✨ 推荐过滤条件组合 ✨")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		row = writePerfectRules(f, refResult.PerfectRules, commonCount, refOnlyCount, row)
+		row += 2 // 空两行
+	}
+
+	// 输出参考表的森林结构
+	if len(refResult.Forest) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🌲 支配关系森林 🌲")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+			fmt.Sprintf("（根节点%d个，D集合更小的节点支配D集合更大的节点）", len(refResult.Forest)))
+		row++
+		row = writeForest(f, refResult.Forest, commonCount, refOnlyCount, row)
+		row += 2 // 空两行
+	}
+
+	// 输出参考表的字段链条详情
+	if len(refResult.Chains) > 0 {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "🔗 字段链条详情 🔗")
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+		for _, chain := range refResult.Chains {
+			row = writeChainDetail(f, chain, commonCount, refOnlyCount, row)
+			row++ // 链条之间空一行
+		}
+	} else {
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "未找到有效的过滤规律")
+		row++
+	}
+
+	return row
+}
+
+// writePerfectRules 写入完美规则组合
+func writePerfectRules(f *excelize.File, rules []PerfectRule, commonCount, onlyCount int, startRow int) int {
+	row := startRow
+
+	for idx, rule := range rules {
+		// 规则标题
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+			fmt.Sprintf("方案 %d: %d个条件组合", idx+1, len(rule.Conditions)))
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+
+		// 表头
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段")
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "条件")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "说明")
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:C%d", row, row))
+		row++
+
+		// 总D集合大小（完美规则的D集合互不相交，因此总D大小为0或各条件D之和）
+		totalDSize := 0
+
+		// 写入每个条件
+		for _, cond := range rule.Conditions {
+			condition := formatCondition(cond.Field, cond.Values)
+
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), cond.Field)
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), condition)
+			f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "覆盖所有共有行")
+			row++
+		}
+
+		// 如果总D为0，高亮显示
+		if totalDSize == 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "💚 完美匹配：不误伤任何独有行！")
+			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+			row++
+		}
+
+		row++ // 方案之间空一行
+	}
+
+	return row
+}
+
+// writeForest 写入支配关系森林
+func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, startRow int) int {
+	row := startRow
+
+	for treeIdx, tree := range forest {
+		// 树标题
+		rootDSize := tree.Root.D.Len()
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
+			fmt.Sprintf("树 %d: 根节点 %s (D=%d)", treeIdx+1, tree.Root.Field, rootDSize))
+		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		row++
+
+		// 根节点信息
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "条件:")
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), formatCondition(tree.Root.Field, tree.Root.Values))
+		row++
+
+		coverage := float64(commonCount) / float64(commonCount+onlyCount) * 100
+		hit := float64(rootDSize) / float64(onlyCount) * 100
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row),
+			fmt.Sprintf("覆盖共有: %.1f%%, 误伤独有: %.1f%%", coverage, hit))
+		row++
+
+		// 根节点推荐度
+		stars := getRecommendation(rootDSize, hit, true)
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), fmt.Sprintf("推荐度: %s", stars))
+		if rootDSize == 0 {
+			setGreenStyle(f, "分析结果", fmt.Sprintf("B%d:C%d", row, row))
+		}
+		row++
+
+		// 子节点信息
+		if len(tree.Children) > 0 {
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), fmt.Sprintf("被支配节点: %d个", len(tree.Children)))
+			row++
+			for _, child := range tree.Children {
+				childDSize := child.Root.D.Len()
+				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row),
+					fmt.Sprintf("↳ %s (D=%d)", child.Root.Field, childDSize))
+				row++
+			}
+		}
+
+		row++ // 树之间空一行
+	}
+
+	return row
+}
+
+// writeFieldChains 写入字段链条分析结果（核心算法输出）- 已废弃，被writeRuleAnalysis替代
 func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 	result MatchResult, mainCount, refCount int, startRow int) int {
 	row := startRow

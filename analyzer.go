@@ -254,27 +254,36 @@ func mapFieldToMain(refField string, mappings []FieldMapping) string {
 
 // ========== 核心算法调用 ==========
 
+// RuleAnalysisResult 规则分析结果
+type RuleAnalysisResult struct {
+	Chains       []*FieldChain // 字段链条
+	Forest       []*Tree       // 支配关系森林
+	PerfectRules []PerfectRule // 完美规则组合
+}
+
 // AnalyzeRulesForBothSheets 分析两个sheet各自的过滤规则
 // 基于共有行和独有行，为每个sheet独立分析过滤条件
 func AnalyzeRulesForBothSheets(result MatchResult, mainData, refData []Row,
 	mainHeaders, refHeaders, mainKeyFields, refKeyFields []string) (
-	mainChains []*FieldChain, refChains []*FieldChain) {
+	mainResult, refResult RuleAnalysisResult) {
 
 	// 1. 分析主表的过滤规则
-	mainChains = analyzeSheetRules(mainData, mainHeaders, mainKeyFields, result.Matched, true)
+	mainResult = analyzeSheetRules(mainData, mainHeaders, mainKeyFields, result.Matched, true, len(result.OnlyMain))
 
 	// 2. 分析参考表的过滤规则
-	refChains = analyzeSheetRules(refData, refHeaders, refKeyFields, result.Matched, false)
+	refResult = analyzeSheetRules(refData, refHeaders, refKeyFields, result.Matched, false, len(result.OnlyRef))
 
-	return mainChains, refChains
+	return mainResult, refResult
 }
 
 // analyzeSheetRules 分析单个sheet的过滤规则
 func analyzeSheetRules(data []Row, headers, keyFields []string,
-	matched []MatchedPair, isMainSheet bool) []*FieldChain {
+	matched []MatchedPair, isMainSheet bool, onlyRowCount int) RuleAnalysisResult {
+
+	result := RuleAnalysisResult{}
 
 	if len(data) == 0 {
-		return nil
+		return result
 	}
 
 	// 1. 构建共有行集合
@@ -319,6 +328,15 @@ func analyzeSheetRules(data []Row, headers, keyFields []string,
 			validChains = append(validChains, chain)
 		}
 	}
+	result.Chains = validChains
 
-	return validChains
+	// 5. 构建支配关系森林
+	result.Forest = finder.buildForest(validChains)
+
+	// 6. 寻找完美规则组合
+	commonCount := commonSet.Len()
+	totalRows := len(data)
+	result.PerfectRules = finder.findPerfectRules(result.Forest, commonCount, totalRows)
+
+	return result
 }
