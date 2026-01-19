@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ========== 预处理 ==========
@@ -196,9 +197,9 @@ func analyzePrefixPatterns(stats *FieldStats, commonSet *RowSet) []*FieldNode {
 	prefixRows := make(map[string]*RowSet)
 
 	for val, rowSet := range stats.ValueRows {
-		maxLen := min(len(val), 3)
+		maxLen := min(utf8.RuneCountInString(val), 3)
 		for length := 1; length <= maxLen; length++ {
-			prefix := val[:length]
+			prefix := getPrefixByChar(val, length)
 			if set, exists := prefixRows[prefix]; exists {
 				set.UnionWith(rowSet)
 			} else {
@@ -229,9 +230,9 @@ func analyzePrefixEnumPatterns(stats *FieldStats, commonSet *RowSet, maxPrefixes
 
 	prefixRows := make(map[string]*RowSet)
 	for val, rowSet := range stats.ValueRows {
-		maxLen := min(len(val), 3)
+		maxLen := min(utf8.RuneCountInString(val), 3)
 		for length := 1; length <= maxLen; length++ {
-			prefix := val[:length]
+			prefix := getPrefixByChar(val, length)
 			if set, exists := prefixRows[prefix]; exists {
 				set.UnionWith(rowSet)
 			} else {
@@ -424,6 +425,24 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// getPrefixByChar 获取字符串的前n个字符（按Unicode字符计数）
+func getPrefixByChar(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	count := 0
+	for i := range s {
+		count++
+		if count > n {
+			return s[:i]
+		}
+	}
+	return s
 }
 
 // ========== 新增：流式组合生成器 ==========
