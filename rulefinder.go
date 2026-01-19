@@ -114,7 +114,14 @@ func (rf *RuleFinder) buildForest(chains []*FieldChain) []*Tree {
 		}
 	}
 
-	return rf.buildTreesFromRoots(roots)
+	forest := rf.buildTreesFromRoots(roots)
+	
+	// 按根节点的D大小排序（从小到大）
+	sort.Slice(forest, func(a, b int) bool {
+		return forest[a].Root.D.Len() < forest[b].Root.D.Len()
+	})
+	
+	return forest
 }
 
 // buildTreesFromRoots 从根节点构建树

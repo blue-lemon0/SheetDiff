@@ -164,7 +164,6 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 // WriteResults 写入分析结果
 func WriteResults(f *excelize.File, result MatchResult,
 	mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules []Rule,
-	mainFields, refFields []FilterFieldInfo,
 	mainRuleResult, refRuleResult RuleAnalysisResult,
 	mainHeaders, refHeaders []string, mainCount, refCount int) error {
 	// 删除已存在的"分析结果"sheet
@@ -182,11 +181,8 @@ func WriteResults(f *excelize.File, result MatchResult,
 	// 写入核心算法分析结果（从第12行开始）
 	chainEndRow := writeRuleAnalysis(f, mainRuleResult, refRuleResult, result, mainCount, refCount, 12)
 
-	// 写入过滤字段分析（从链条分析结束行+2开始）
-	filterEndRow := writeFilterFields(f, mainFields, refFields, chainEndRow+2)
-
-	// 写入规则（从过滤字段分析结束行+2开始）
-	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, filterEndRow+2)
+	// 写入规则（从链条分析结束行+2开始）
+	ruleEndRow := writeAllRules(f, mainOnlyRules, mainCommonRules, refOnlyRules, refCommonRules, chainEndRow+2)
 
 	// 写入详细差异样本（从规则结束行+2开始）
 	writeDetails(f, result, mainHeaders, refHeaders, ruleEndRow+2)
@@ -619,97 +615,6 @@ func setGreenStyle(f *excelize.File, sheet, cellRange string) {
 		Font: &excelize.Font{Bold: true},
 	})
 	f.SetCellStyle(sheet, cellRange, cellRange, style)
-}
-
-// writeFilterFields 写入过滤字段分析
-func writeFilterFields(f *excelize.File, mainFields, refFields []FilterFieldInfo, startRow int) int {
-	row := startRow
-
-	// 写入主表可能的过滤字段
-	if len(mainFields) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【主表可能的过滤字段】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段名")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "取值数量")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "是否有空白")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "是否常量")
-		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "可否作为过滤")
-		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "具体取值（最多5个）")
-		row++
-
-		// 先写入可能作为过滤的字段
-		for _, field := range mainFields {
-			if field.CouldBeFilter {
-				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
-				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
-				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
-				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
-				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "✅ 可")
-				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
-				row++
-			}
-		}
-
-		// 再写入不能作为过滤的字段
-		for _, field := range mainFields {
-			if !field.CouldBeFilter {
-				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
-				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
-				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
-				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
-				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "❌ 否")
-				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
-				row++
-			}
-		}
-
-		row++ // 空一行
-	}
-
-	// 写入参考表可能的过滤字段
-	if len(refFields) > 0 {
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "【参考表可能的过滤字段】")
-		row++
-
-		// 表头
-		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "字段名")
-		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "取值数量")
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "是否有空白")
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "是否常量")
-		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "可否作为过滤")
-		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "具体取值（最多5个）")
-		row++
-
-		// 先写入可能作为过滤的字段
-		for _, field := range refFields {
-			if field.CouldBeFilter {
-				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
-				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
-				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
-				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
-				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "✅ 可")
-				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
-				row++
-			}
-		}
-
-		// 再写入不能作为过滤的字段
-		for _, field := range refFields {
-			if !field.CouldBeFilter {
-				f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), field.Field)
-				f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), field.ValueCount)
-				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), boolToText(field.HasEmpty))
-				f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), boolToText(field.IsConstant))
-				f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "❌ 否")
-				f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), strings.Join(field.UniqueValues, ", "))
-				row++
-			}
-		}
-	}
-
-	return row
 }
 
 // boolToText 布尔值转文本
