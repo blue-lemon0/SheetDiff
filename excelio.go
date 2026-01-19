@@ -503,24 +503,24 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 	row++
 
 	// 表头
-	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "优先级")
-	f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "规律类型")
-	f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "条件")
-	f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "误伤独有行数")
-	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤率")
-	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "推荐度")
-	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "归属")
+	headers := []string{"优先级", "规律类型", "条件", "误伤独有行数", "误伤率", "推荐度", "归属"}
+	for i, header := range headers {
+		col := 'A' + rune(i)
+		cell := fmt.Sprintf("%c%d", col, row)
+		f.SetCellValue("分析结果", cell, header)
+	}
 
-	// 先设置基础样式
+	// 设置表头样式
 	if treeInfo == "未归类" {
-		// 未归类：灰色样式
-		for col := 'A'; col <= 'G'; col++ {
-			cell := fmt.Sprintf("%c%d", col, row)
-			setGrayStyle(f, "分析结果", cell)
-		}
+		setRowGrayStyle(f, "分析结果", row, 'A', 'G')
 	} else {
-		// 已归类：表头样式
-		setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("B%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("C%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("D%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("E%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("F%d", row))
+		setHeaderStyle(f, "分析结果", fmt.Sprintf("G%d", row))
 	}
 	row++
 
@@ -587,12 +587,8 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 		// 如果是完美规律（D=0），高亮整行
 		if dSize == 0 {
 			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
-		} else if treeInfo == "未归类" || belonging == "未归类" {
-			// 逐一设置每个单元格的灰色样式
-			for col := 'A'; col <= 'G'; col++ {
-				cell := fmt.Sprintf("%c%d", col, row)
-				setGrayStyle(f, "分析结果", cell)
-			}
+		} else if isUnclassified(treeInfo, belonging) {
+			setRowGrayStyle(f, "分析结果", row, 'A', 'G')
 		}
 
 		row++
@@ -704,6 +700,24 @@ func setGrayStyle(f *excelize.File, sheet, cellRange string) {
 		Font: &excelize.Font{Color: "#666666"},
 	})
 	f.SetCellStyle(sheet, cellRange, cellRange, style)
+}
+
+// setCellValue 设置单元格值
+func setCellValue(f *excelize.File, sheet, cell, value string) {
+	f.SetCellValue(sheet, cell, value)
+}
+
+// setRowGrayStyle 设置整行灰色样式
+func setRowGrayStyle(f *excelize.File, sheet string, row int, startCol, endCol rune) {
+	for col := startCol; col <= endCol; col++ {
+		cell := fmt.Sprintf("%c%d", col, row)
+		setGrayStyle(f, sheet, cell)
+	}
+}
+
+// isUnclassified 判断是否未归类
+func isUnclassified(treeInfo, belonging string) bool {
+	return treeInfo == "未归类" || belonging == "未归类"
 }
 
 // boolToText 布尔值转文本
