@@ -70,7 +70,7 @@ func (rf *RuleFinder) FindRules(rows []Row, commonSet *RowSet) []PerfectRule {
 	chains := rf.buildAllChains(rows, commonSet)
 
 	// 2. 建立支配关系森林
-	forest := rf.buildForest(chains)
+	forest, _ := rf.buildForest(chains)
 
 	// 3. 寻找完美规则
 	rules := rf.findPerfectRules(forest, commonSet.Len(), len(rows))
@@ -104,30 +104,10 @@ func (rf *RuleFinder) buildAllChains(rows []Row, commonSet *RowSet) []*FieldChai
 	return chains
 }
 
-// buildForest 建立支配关系森林
-func (rf *RuleFinder) buildForest(chains []*FieldChain) []*Tree {
-	// 收集所有根节点
-	var roots []*FieldNode
-	for _, chain := range chains {
-		if chain.Root != nil {
-			roots = append(roots, chain.Root)
-		}
-	}
-
-	forest := rf.buildTreesFromRoots(roots)
-
-	// 按根节点的D大小排序（从小到大）
-	sort.Slice(forest, func(a, b int) bool {
-		return forest[a].Root.D.Len() < forest[b].Root.D.Len()
-	})
-
-	return forest
-}
-
 // buildTreesFromRoots 从根节点构建树
-func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) []*Tree {
+func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) ([]*Tree, map[*FieldNode]*Tree) {
 	if len(roots) == 0 {
-		return []*Tree{}
+		return []*Tree{}, nil
 	}
 
 	// 1. 建立支配关系
@@ -168,25 +148,51 @@ func (rf *RuleFinder) buildTreesFromRoots(roots []*FieldNode) []*Tree {
 		}
 	}
 
-	// 3. 构建树
+	// 3. 构建树并创建节点到树的映射
 	var forest []*Tree
+	nodeToTree := make(map[*FieldNode]*Tree)
+
 	for _, rootNode := range topLevelNodes {
 		tree := &Tree{Root: rootNode}
+		nodeToTree[rootNode] = tree
+
 		if children, exists := childrenMap[rootNode]; exists {
 			for _, childNode := range children {
 				// 检查这个child是否确实被root支配
 				if childNode.D.SubsetOf(rootNode.D) {
-					tree.Children = append(tree.Children, &Tree{
+					childTree := &Tree{
 						Root:   childNode,
 						Parent: tree,
-					})
+					}
+					tree.Children = append(tree.Children, childTree)
+					nodeToTree[childNode] = childTree
 				}
 			}
 		}
 		forest = append(forest, tree)
 	}
 
-	return forest
+	return forest, nodeToTree
+}
+
+// buildForest 建立支配关系森林
+func (rf *RuleFinder) buildForest(chains []*FieldChain) ([]*Tree, map[*FieldNode]*Tree) {
+	// 收集所有根节点
+	var roots []*FieldNode
+	for _, chain := range chains {
+		if chain.Root != nil {
+			roots = append(roots, chain.Root)
+		}
+	}
+
+	forest, nodeToTree := rf.buildTreesFromRoots(roots)
+
+	// 按根节点的D大小排序（从小到大）
+	sort.Slice(forest, func(a, b int) bool {
+		return forest[a].Root.D.Len() < forest[b].Root.D.Len()
+	})
+
+	return forest, nodeToTree
 }
 
 // findPerfectRules 寻找完美规则

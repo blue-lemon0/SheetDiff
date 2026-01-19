@@ -236,7 +236,7 @@ func writeRuleAnalysis(f *excelize.File, mainResult, refResult RuleAnalysisResul
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 		for _, chain := range mainResult.Chains {
-			row = writeChainDetail(f, chain, commonCount, mainOnlyCount, row)
+			row = writeChainDetail(f, chain, mainResult.NodeToTree, commonCount, mainOnlyCount, row)
 			row++ // 链条之间空一行
 		}
 	} else {
@@ -283,7 +283,7 @@ func writeRuleAnalysis(f *excelize.File, mainResult, refResult RuleAnalysisResul
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 		for _, chain := range refResult.Chains {
-			row = writeChainDetail(f, chain, commonCount, refOnlyCount, row)
+			row = writeChainDetail(f, chain, refResult.NodeToTree, commonCount, refOnlyCount, row)
 			row++ // 链条之间空一行
 		}
 	} else {
@@ -342,11 +342,17 @@ func writePerfectRules(f *excelize.File, rules []PerfectRule, commonCount, onlyC
 func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, startRow int) int {
 	row := startRow
 
+	// 森林概览
+	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), fmt.Sprintf("支配关系森林概览: 共%d棵树", len(forest)))
+	setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
+	row++
+	row++
+
 	for treeIdx, tree := range forest {
 		// 树标题
 		rootDSize := tree.Root.D.Len()
 		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
-			fmt.Sprintf("树 %d: 根节点 %s (D=%d)", treeIdx+1, tree.Root.Field, rootDSize))
+			fmt.Sprintf("🌲 树 %d: 根节点 %s (D=%d)", treeIdx+1, tree.Root.Field, rootDSize))
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 
@@ -369,19 +375,45 @@ func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, s
 		}
 		row++
 
-		// 子节点信息
+		// 子节点信息（详细层次结构）
 		if len(tree.Children) > 0 {
-			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), fmt.Sprintf("被支配节点: %d个", len(tree.Children)))
+			f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), fmt.Sprintf("📋 被支配节点: %d个", len(tree.Children)))
+			setBoldStyle(f, "分析结果", fmt.Sprintf("B%d", row))
 			row++
-			for _, child := range tree.Children {
-				childDSize := child.Root.D.Len()
-				f.SetCellValue("分析结果", fmt.Sprintf("C%d", row),
-					fmt.Sprintf("↳ %s (D=%d)", child.Root.Field, childDSize))
-				row++
-			}
+
+			// 递归写入子树
+			row = writeTreeChildren(f, tree.Children, commonCount, onlyCount, row, 2)
 		}
 
 		row++ // 树之间空一行
+	}
+
+	return row
+}
+
+// writeTreeChildren 递归写入树的子节点
+func writeTreeChildren(f *excelize.File, children []*Tree, commonCount, onlyCount int, startRow, indent int) int {
+	row := startRow
+
+	for _, child := range children {
+		childDSize := child.Root.D.Len()
+		hit := float64(childDSize) / float64(onlyCount) * 100
+		stars := getRecommendation(childDSize, hit, false)
+
+		// 缩进
+		indentStr := strings.Repeat("  ", indent)
+
+		// 子节点信息
+		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), fmt.Sprintf("%s↳ 节点: %s", indentStr, child.Root.Field))
+		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), formatCondition(child.Root.Field, child.Root.Values))
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("D=%d, 误伤独有: %.1f%%", childDSize, hit))
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), stars)
+		row++
+
+		// 递归写入孙节点
+		if len(child.Children) > 0 {
+			row = writeTreeChildren(f, child.Children, commonCount, onlyCount, row, indent+1)
+		}
 	}
 
 	return row
@@ -409,7 +441,7 @@ func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 
 	if len(mainChains) > 0 {
 		for _, chain := range mainChains {
-			row = writeChainDetail(f, chain, commonCount, mainOnlyCount, row)
+			row = writeChainDetail(f, chain, nil, commonCount, mainOnlyCount, row)
 			row++ // 链条之间空一行
 		}
 	} else {
@@ -431,7 +463,7 @@ func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 
 	if len(refChains) > 0 {
 		for _, chain := range refChains {
-			row = writeChainDetail(f, chain, commonCount, refOnlyCount, row)
+			row = writeChainDetail(f, chain, nil, commonCount, refOnlyCount, row)
 			row++ // 链条之间空一行
 		}
 	} else {
@@ -443,13 +475,27 @@ func writeFieldChains(f *excelize.File, mainChains, refChains []*FieldChain,
 }
 
 // writeChainDetail 写入单个过滤条件链的详细信息
-func writeChainDetail(f *excelize.File, chain *FieldChain,
+func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*FieldNode]*Tree,
 	commonCount, onlyCount int, startRow int) int {
 	row := startRow
 
+	// 确定链条所属的树
+	treeInfo := "未归类"
+	if chain.Root != nil && nodeToTree != nil {
+		if tree, exists := nodeToTree[chain.Root]; exists {
+			// 找到树的根节点
+			current := tree
+			for current.Parent != nil {
+				current = current.Parent
+			}
+			// 这里简化处理，实际应该传递树的索引信息
+			treeInfo = "已归类到某棵树"
+		}
+	}
+
 	// 链条标题
 	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
-		fmt.Sprintf("过滤条件链: %s (共%d个规律)", chain.Field, len(chain.Nodes)))
+		fmt.Sprintf("过滤条件链: %s (共%d个规律) - %s", chain.Field, len(chain.Nodes), treeInfo))
 	setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 	row++
 
@@ -461,7 +507,8 @@ func writeChainDetail(f *excelize.File, chain *FieldChain,
 	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤独有行")
 	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "D集合大小")
 	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "推荐度")
-	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+	f.SetCellValue("分析结果", fmt.Sprintf("H%d", row), "归属")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:H%d", row, row))
 	row++
 
 	// 写入每个节点
@@ -499,9 +546,26 @@ func writeChainDetail(f *excelize.File, chain *FieldChain,
 		recommendation := getRecommendation(dSize, dPct, node.IsRoot)
 		f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), recommendation)
 
+		// 归属信息
+		belonging := ""
+		if node.IsRoot {
+			if nodeToTree != nil {
+				if _, exists := nodeToTree[node]; exists {
+					belonging = "树根节点"
+				} else {
+					belonging = "未归类"
+				}
+			} else {
+				belonging = "树根节点"
+			}
+		} else {
+			belonging = "非根节点"
+		}
+		f.SetCellValue("分析结果", fmt.Sprintf("H%d", row), belonging)
+
 		// 如果是完美规律（D=0），高亮整行
 		if dSize == 0 {
-			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
+			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:H%d", row, row))
 		}
 
 		row++

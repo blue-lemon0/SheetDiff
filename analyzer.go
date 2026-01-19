@@ -71,9 +71,10 @@ func buildRowKey(row Row, keyFields []string) string {
 
 // RuleAnalysisResult 规则分析结果
 type RuleAnalysisResult struct {
-	Chains       []*FieldChain // 过滤条件链
-	Forest       []*Tree       // 支配关系森林
-	PerfectRules []PerfectRule // 完美规则组合
+	Chains       []*FieldChain        // 过滤条件链
+	Forest       []*Tree              // 支配关系森林
+	NodeToTree   map[*FieldNode]*Tree // 节点到树的映射
+	PerfectRules []PerfectRule        // 完美规则组合
 }
 
 // AnalyzeRulesForBothSheets 分析两个sheet各自的过滤规则
@@ -146,7 +147,7 @@ func analyzeSheetRules(data []Row, headers, keyFields []string,
 	result.Chains = validChains
 
 	// 5. 构建支配关系森林
-	result.Forest = finder.buildForest(validChains)
+	result.Forest, result.NodeToTree = finder.buildForest(validChains)
 
 	// 6. 寻找完美规则组合
 	commonCount := commonSet.Len()

@@ -246,7 +246,7 @@ func TestCombination(t *testing.T) {
 	// 先看支配关系森林
 	if testing.Verbose() {
 		chains := finder.buildAllChains(rows, commonSet)
-		forest := finder.buildForest(chains)
+		forest, _ := finder.buildForest(chains)
 		printForest(forest)
 	}
 
