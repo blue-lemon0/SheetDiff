@@ -352,7 +352,7 @@ func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, s
 		// 树标题
 		rootDSize := tree.Root.D.Len()
 		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row),
-			fmt.Sprintf("🌲 树 %d: 根节点 %s (D=%d)", treeIdx+1, tree.Root.Field, rootDSize))
+			fmt.Sprintf("🌲 树 %d: 根节点 %s (误伤独有行数=%d)", treeIdx+1, tree.Root.Field, rootDSize))
 		setBoldStyle(f, "分析结果", fmt.Sprintf("A%d", row))
 		row++
 
@@ -406,7 +406,7 @@ func writeTreeChildren(f *excelize.File, children []*Tree, commonCount, onlyCoun
 		// 子节点信息
 		f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), fmt.Sprintf("%s↳ 节点: %s", indentStr, child.Root.Field))
 		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), formatCondition(child.Root.Field, child.Root.Values))
-		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("D=%d, 误伤独有: %.1f%%", childDSize, hit))
+		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), fmt.Sprintf("误伤独有行数=%d, 误伤率: %.1f%%", childDSize, hit))
 		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), stars)
 		row++
 
@@ -503,12 +503,11 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 	f.SetCellValue("分析结果", fmt.Sprintf("A%d", row), "优先级")
 	f.SetCellValue("分析结果", fmt.Sprintf("B%d", row), "规律类型")
 	f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), "条件")
-	f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "覆盖共有行")
-	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤独有行")
-	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "D集合大小")
-	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "推荐度")
-	f.SetCellValue("分析结果", fmt.Sprintf("H%d", row), "归属")
-	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:H%d", row, row))
+	f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), "误伤独有行数")
+	f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), "误伤率")
+	f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), "推荐度")
+	f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), "归属")
+	setHeaderStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
 	row++
 
 	// 写入每个节点
@@ -528,23 +527,20 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 		condition := formatCondition(node.Field, node.Values)
 		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), condition)
 
-		// 覆盖共有行（始终100%，因为所有节点都覆盖所有共有行）
-		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), fmt.Sprintf("100%% (%d/%d)", commonCount, commonCount))
-
-		// 误伤独有行
+		// 误伤独有行数
 		dSize := node.D.Len()
+		f.SetCellValue("分析结果", fmt.Sprintf("D%d", row), dSize)
+
+		// 误伤率
 		dPct := 0.0
 		if onlyCount > 0 {
 			dPct = float64(dSize) / float64(onlyCount) * 100
 		}
-		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.1f%% (%d/%d)", dPct, dSize, onlyCount))
-
-		// D集合大小
-		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), dSize)
+		f.SetCellValue("分析结果", fmt.Sprintf("E%d", row), fmt.Sprintf("%.1f%%", dPct))
 
 		// 推荐度
 		recommendation := getRecommendation(dSize, dPct, node.IsRoot)
-		f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), recommendation)
+		f.SetCellValue("分析结果", fmt.Sprintf("F%d", row), recommendation)
 
 		// 归属信息
 		belonging := ""
@@ -561,11 +557,11 @@ func writeChainDetail(f *excelize.File, chain *FieldChain, nodeToTree map[*Field
 		} else {
 			belonging = "非根节点"
 		}
-		f.SetCellValue("分析结果", fmt.Sprintf("H%d", row), belonging)
+		f.SetCellValue("分析结果", fmt.Sprintf("G%d", row), belonging)
 
 		// 如果是完美规律（D=0），高亮整行
 		if dSize == 0 {
-			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:H%d", row, row))
+			setGreenStyle(f, "分析结果", fmt.Sprintf("A%d:G%d", row, row))
 		}
 
 		row++
