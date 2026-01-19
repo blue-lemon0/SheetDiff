@@ -369,6 +369,16 @@ func buildFieldChainWithLimit(nodes []*FieldNode, field string, maxNodes int) *F
 	}
 }
 
+// isPrefixPattern 判断是否为前缀模式
+func isPrefixPattern(values []string) bool {
+	for _, val := range values {
+		if strings.HasSuffix(val, "*") {
+			return true
+		}
+	}
+	return false
+}
+
 // deduplicateNodes 使用 RowSet.String() 去重（依赖你独立文件中的正确实现）
 func deduplicateNodes(nodes []*FieldNode) []*FieldNode {
 	if len(nodes) <= 1 {
@@ -385,8 +395,23 @@ func deduplicateNodes(nodes []*FieldNode) []*FieldNode {
 	for _, group := range groups {
 		best := group[0]
 		for _, node := range group[1:] {
-			if len(node.Values) < len(best.Values) {
+			// 优先选择非前缀模式
+			bestIsPrefix := isPrefixPattern(best.Values)
+			nodeIsPrefix := isPrefixPattern(node.Values)
+
+			if !nodeIsPrefix && bestIsPrefix {
+				// 节点不是前缀模式，当前最佳是前缀模式 → 选择节点
 				best = node
+			} else if !nodeIsPrefix && !bestIsPrefix {
+				// 两者都不是前缀模式 → 选择值长度更短的
+				if len(node.Values) < len(best.Values) {
+					best = node
+				}
+			} else if nodeIsPrefix && bestIsPrefix {
+				// 两者都是前缀模式 → 选择值长度更短的
+				if len(node.Values) < len(best.Values) {
+					best = node
+				}
 			}
 		}
 		result = append(result, best)
