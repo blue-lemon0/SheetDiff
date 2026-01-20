@@ -51,21 +51,44 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 		result.OnlyRef = append(result.OnlyRef, refData[refIdx])
 	}
 
+	// 日志输出
+	println("===== 主键匹配结果 =====")
+	println("主表行数:", len(mainData))
+	println("参考表行数:", len(refData))
+	println("主表有效主键数:", len(mainMap))
+	println("参考表有效主键数:", len(refMap)+len(result.Matched))
+	println("匹配行数:", len(result.Matched))
+	println("主表独有行数:", len(result.OnlyMain))
+	println("参考表独有行数:", len(result.OnlyRef))
+	println("====================")
+
 	return result
 }
 
-// buildRowKey 构建行的主键字符串
+// buildRowKey 构建行的主键字符串（保持用户配置的字段顺序）
 func buildRowKey(row Row, keyFields []string) string {
-	parts := make([]string, 0, len(keyFields))
+	// 检查所有主键字段是否存在
 	for _, field := range keyFields {
-		if value, exists := row[field]; exists {
-			parts = append(parts, strings.TrimSpace(value))
-		} else {
+		if _, exists := row[field]; !exists {
 			// 字段不存在时，直接返回空字符串，表示主键无效
 			return ""
 		}
 	}
-	return strings.Join(parts, "|")
+
+	// 按照用户配置的字段顺序构建键
+	parts := make([]string, 0, len(keyFields))
+	for _, field := range keyFields {
+		parts = append(parts, strings.TrimSpace(row[field]))
+	}
+
+	key := strings.Join(parts, "|")
+
+	// 日志输出
+	if len(keyFields) > 0 {
+		println("生成主键:", key)
+	}
+
+	return key
 }
 
 // ========== 核心算法调用 ==========

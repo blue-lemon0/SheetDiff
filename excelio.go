@@ -361,7 +361,13 @@ func writeForest(f *excelize.File, forest []*Tree, commonCount, onlyCount int, s
 		f.SetCellValue("分析结果", fmt.Sprintf("C%d", row), formatCondition(tree.Root.Field, tree.Root.Values))
 		row++
 
-		hit := float64(rootDSize) / float64(onlyCount) * 100
+		// 计算误伤率，避免除零错误
+		var hit float64
+		if onlyCount > 0 {
+			hit = float64(rootDSize) / float64(onlyCount) * 100
+		} else {
+			hit = 0
+		}
 		f.SetCellValue("分析结果", fmt.Sprintf("B%d", row),
 			fmt.Sprintf("误伤独有行数=%d, 误伤率: %.1f%%", rootDSize, hit))
 		row++
@@ -396,7 +402,13 @@ func writeTreeChildren(f *excelize.File, children []*Tree, commonCount, onlyCoun
 
 	for _, child := range children {
 		childDSize := child.Root.D.Len()
-		hit := float64(childDSize) / float64(onlyCount) * 100
+		// 计算误伤率，避免除零错误
+		var hit float64
+		if onlyCount > 0 {
+			hit = float64(childDSize) / float64(onlyCount) * 100
+		} else {
+			hit = 0
+		}
 		stars := getRecommendation(childDSize, hit, false)
 
 		// 缩进
