@@ -85,10 +85,28 @@ func (rf *RuleFinder) buildAllChains(rows []Row, commonSet *RowSet) []*FieldChai
 		return []*FieldChain{}
 	}
 
-	fields := make([]string, 0, len(rows[0]))
-	for field := range rows[0] {
+	// 收集所有行的所有字段名，确保不遗漏任何字段
+	fieldMap := make(map[string]bool)
+	for _, row := range rows {
+		for field := range row {
+			fieldMap[field] = true
+		}
+	}
+
+	// 将字段名转换为切片
+	fields := make([]string, 0, len(fieldMap))
+	for field := range fieldMap {
 		fields = append(fields, field)
 	}
+
+	// 打印 fields 的长度和内容，以便调试
+	println("===== 字段分析 =====")
+	println("字段总数:", len(fields))
+	println("字段列表:")
+	for i, field := range fields {
+		println(i+1, ":", field)
+	}
+	println("====================")
 
 	// 为每个字段构建链条（使用 pattern_analyzer.go 的强化分析）
 	var chains []*FieldChain

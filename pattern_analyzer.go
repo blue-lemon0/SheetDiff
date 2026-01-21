@@ -30,12 +30,12 @@ func preprocessField(field string, rows []Row) *FieldStats {
 		TotalRows: len(rows),
 	}
 
+	println("预处理字段", field, "，行数：", len(rows))
+
 	valueCount := make(map[string]int)
 	for i, row := range rows {
 		val := strings.TrimSpace(row[field])
-		if val == "" {
-			continue
-		}
+		// 不跳过空值，而是将空值当作一个特殊的值来处理
 		if set, exists := stats.ValueRows[val]; exists {
 			set.Add(i)
 		} else {
@@ -49,6 +49,8 @@ func preprocessField(field string, rows []Row) *FieldStats {
 	for val := range stats.ValueRows {
 		stats.Values = append(stats.Values, val)
 	}
+
+	println("字段", field, "预处理完成，有效值数量：", len(stats.Values))
 
 	sort.Slice(stats.Values, func(i, j int) bool {
 		return valueCount[stats.Values[i]] > valueCount[stats.Values[j]]
@@ -98,11 +100,14 @@ func isDateLike(val string) bool {
 // ========== 规律分析 ==========
 
 func analyzeFieldPatterns(field string, rows []Row, commonSet *RowSet) *FieldChain {
+	println("开始分析字段", field)
 	stats := preprocessField(field, rows)
 	if len(stats.Values) == 0 {
+		println("字段", field, "没有有效值，跳过")
 		return nil
 	}
 
+	println("字段", field, "共有行数量：", commonSet.Len())
 	var allNodes []*FieldNode
 
 	equalNodes := analyzeEqualPatterns(stats, commonSet)
@@ -124,6 +129,12 @@ func analyzeFieldPatterns(field string, rows []Row, commonSet *RowSet) *FieldCha
 	if (stats.IsNumeric || stats.IsDate) && len(stats.Values) > 1 {
 		rangeNodes := analyzeRangePatterns(stats, commonSet)
 		allNodes = append(allNodes, rangeNodes...)
+	}
+
+	println("字段", field, "生成的节点数量：", len(allNodes))
+	if len(allNodes) == 0 {
+		println("字段", field, "没有生成任何节点，跳过")
+		return nil
 	}
 
 	return buildFieldChainWithLimit(allNodes, stats.Field, 4)
