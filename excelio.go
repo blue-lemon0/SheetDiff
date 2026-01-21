@@ -143,6 +143,17 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 		headers[i] = strings.TrimSpace(h)
 	}
 
+	// 检测重复列名
+	headerMap := make(map[string]bool)
+	for _, h := range headers {
+		if h != "" {
+			if headerMap[h] {
+				return nil, nil, fmt.Errorf("sheet %s 中存在重复的列名: %s", sheet, h)
+			}
+			headerMap[h] = true
+		}
+	}
+
 	// 读取数据行（从表头的下一行开始）
 	data := make([]Row, 0)
 	for i := headerRow; i < len(rows); i++ {
