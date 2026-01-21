@@ -727,6 +727,97 @@ func setRowGrayStyle(f *excelize.File, sheet string, row int, startCol, endCol r
 	}
 }
 
+// HighlightMatchedKeyCells 为主表和参考表中匹配的行的主键单元格添加绿色背景
+func HighlightMatchedKeyCells(f *excelize.File, result MatchResult, config Config) error {
+	// 为匹配的主键单元格创建绿色背景样式
+	greenStyle, err := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
+	})
+	if err != nil {
+		return fmt.Errorf("创建绿色样式失败: %w", err)
+	}
+
+	// 处理主表
+	if err := highlightSheetKeyCells(f, config.MainSheet, config.HeaderRow, result.Matched, true, config.MainKeys, greenStyle); err != nil {
+		return err
+	}
+
+	// 处理参考表
+	if err := highlightSheetKeyCells(f, config.RefSheet, config.RefHeaderRow, result.Matched, false, config.RefKeys, greenStyle); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// highlightSheetKeyCells 为单个sheet中匹配的行的主键单元格添加绿色背景
+func highlightSheetKeyCells(f *excelize.File, sheet string, headerRow int, matched []MatchedPair, isMainSheet bool, keyFields []string, style int) error {
+	// 获取sheet的所有行
+	rows, err := f.GetRows(sheet)
+	if err != nil {
+		return fmt.Errorf("读取sheet %s 失败: %w", sheet, err)
+	}
+
+	if len(rows) < headerRow {
+		return nil
+	}
+
+	// 获取表头
+	headers := rows[headerRow-1]
+
+	// 创建表头到列索引的映射
+	headerToCol := make(map[string]int)
+	for i, header := range headers {
+		headerToCol[strings.TrimSpace(header)] = i
+	}
+
+	// 为每个匹配的行处理主键单元格
+	for _, pair := range matched {
+		var rowIndex int
+		if isMainSheet {
+			// 主表的行索引（Excel行号，从1开始）
+			// 数据行从表头的下一行开始，所以要+1
+			// pair.MainIndex是数据数组中的索引（0-based）
+			// headerRow是表头行号（1-based）
+			// 所以Excel行号 = 数据索引 + 表头行号 + 1
+			rowIndex = pair.MainIndex + headerRow + 1
+		} else {
+			// 参考表的行索引（Excel行号，从1开始）
+			// 数据行从表头的下一行开始，所以要+1
+			// pair.RefIndex是数据数组中的索引（0-based）
+			// headerRow是表头行号（1-based）
+			// 所以Excel行号 = 数据索引 + 表头行号 + 1
+			rowIndex = pair.RefIndex + headerRow + 1
+		}
+
+		// 确保行索引在有效范围内
+		// 注意：len(rows)返回的是行的数量（0-based），而Excel行号是从1开始的
+		// 所以有效的行索引范围是 [1, len(rows)]
+		if rowIndex < 1 || rowIndex > len(rows) {
+			continue
+		}
+
+		// 为每个主键字段设置绿色背景
+		for _, keyField := range keyFields {
+			if colIndex, exists := headerToCol[keyField]; exists {
+				// 将列索引转换为Excel列字母（如0→A, 1→B, 2→C等）
+				colLetter, err := excelize.ColumnNumberToName(colIndex + 1)
+				if err != nil {
+					continue
+				}
+				cell := fmt.Sprintf("%s%d", colLetter, rowIndex)
+
+				// 设置单元格样式
+				if err := f.SetCellStyle(sheet, cell, cell, style); err != nil {
+					return fmt.Errorf("设置单元格样式失败 %s!%s: %w", sheet, cell, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // isUnclassified 判断是否未归类
 func isUnclassified(treeInfo, belonging string) bool {
 	return treeInfo == "未归类" || belonging == "未归类"

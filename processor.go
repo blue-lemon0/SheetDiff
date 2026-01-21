@@ -32,11 +32,16 @@ func RunAnalysis(excelFile string) error {
 	// 5. 主键匹配
 	result := MatchByKeys(mainData, refData, config)
 
-	// 6. 核心算法：分析过滤规则（过滤条件链 + 森林 + 完美规则）
+	// 6. 为主表和参考表中匹配的行的主键单元格添加绿色背景
+	if err := HighlightMatchedKeyCells(f, result, config); err != nil {
+		return fmt.Errorf("高亮匹配的主键单元格失败: %w", err)
+	}
+
+	// 7. 核心算法：分析过滤规则（过滤条件链 + 森林 + 完美规则）
 	mainRuleResult, refRuleResult := AnalyzeRulesForBothSheets(result, mainData, refData,
 		mainHeaders, refHeaders, config.MainKeys, config.RefKeys)
 
-	// 9. 输出结果
+	// 8. 输出结果
 	if err := WriteResults(f, result,
 		mainRuleResult, refRuleResult,
 		mainHeaders, refHeaders, len(mainData), len(refData)); err != nil {
