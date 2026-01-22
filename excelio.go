@@ -158,9 +158,16 @@ func LoadSheetData(f *excelize.File, sheet string, headerRow int) ([]Row, []stri
 	data := make([]Row, 0)
 	for i := headerRow; i < len(rows); i++ {
 		row := make(Row)
-		for j, cell := range rows[i] {
-			if j < len(headers) && headers[j] != "" {
-				row[headers[j]] = strings.TrimSpace(cell)
+		// 遍历所有表头列，确保所有字段都被添加到row映射中
+		for j, header := range headers {
+			if header != "" {
+				var cellValue string
+				if j < len(rows[i]) {
+					cellValue = strings.TrimSpace(rows[i][j])
+				} else {
+					cellValue = "" // 数据行没有对应列，设为空字符串
+				}
+				row[header] = cellValue
 			}
 		}
 		// 跳过全空的行

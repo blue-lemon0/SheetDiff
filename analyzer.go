@@ -14,18 +14,28 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 
 	// 构建主表的主键映射（保留索引）
 	mainMap := make(map[string]int)
+	mainKeyCount := make(map[string]int) // 用于检测重复主键
 	for i, row := range mainData {
-		key := buildRowKey(row, config.MainKeys)
+		key := buildRowKey(row, config.MainKeys, i+1) // 行号从1开始
 		if key != "" {
+			mainKeyCount[key]++
+			if mainKeyCount[key] > 1 {
+				println("主表重复主键:", key, "，行号:", i+1)
+			}
 			mainMap[key] = i
 		}
 	}
 
 	// 构建参考表的主键映射（保留索引）
 	refMap := make(map[string]int)
+	refKeyCount := make(map[string]int) // 用于检测重复主键
 	for i, row := range refData {
-		key := buildRowKey(row, config.RefKeys)
+		key := buildRowKey(row, config.RefKeys, i+1) // 行号从1开始
 		if key != "" {
+			refKeyCount[key]++
+			if refKeyCount[key] > 1 {
+				println("参考表重复主键:", key, "，行号:", i+1)
+			}
 			refMap[key] = i
 		}
 	}
@@ -56,7 +66,9 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 	println("主表行数:", len(mainData))
 	println("参考表行数:", len(refData))
 	println("主表有效主键数:", len(mainMap))
+	println("主表无效主键数:", len(mainData)-len(mainMap))
 	println("参考表有效主键数:", len(refMap)+len(result.Matched))
+	println("参考表无效主键数:", len(refData)-(len(refMap)+len(result.Matched)))
 	println("匹配行数:", len(result.Matched))
 	println("主表独有行数:", len(result.OnlyMain))
 	println("参考表独有行数:", len(result.OnlyRef))
@@ -66,7 +78,7 @@ func MatchByKeys(mainData, refData []Row, config Config) MatchResult {
 }
 
 // buildRowKey 构建行的主键字符串（保持用户配置的字段顺序）
-func buildRowKey(row Row, keyFields []string) string {
+func buildRowKey(row Row, keyFields []string, rowIndex int) string {
 	// 检查所有主键字段是否存在
 	for _, field := range keyFields {
 		if _, exists := row[field]; !exists {
@@ -78,15 +90,15 @@ func buildRowKey(row Row, keyFields []string) string {
 	// 按照用户配置的字段顺序构建键
 	parts := make([]string, 0, len(keyFields))
 	for _, field := range keyFields {
-		parts = append(parts, strings.TrimSpace(row[field]))
+		val := strings.TrimSpace(row[field])
+		parts = append(parts, val)
+		// 检查主键字段值是否为空
+		if val == "" {
+			return ""
+		}
 	}
 
 	key := strings.Join(parts, "|")
-
-	// 日志输出
-	if len(keyFields) > 0 {
-		println("生成主键:", key)
-	}
 
 	return key
 }
